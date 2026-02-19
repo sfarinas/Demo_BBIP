@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Provedor da Fibra{% endblock %}
+
+{% block main_content %}
+    <h2>Cadastrar Novo Provedor da Fibra</h2>
+    <form method="POST">
+        <label for="nome_detentor">Nome do Provedor:</label>
+        <input type="text" id="nome_detentor" name="nome_detentor" required>
+        <button type="submit">Cadastrar Provedor</button>
+    </form>
+{% endblock %}

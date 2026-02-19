@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar Tipo de Alarme' if tipo_alarme else 'Cadastrar Tipos de Alarme e Falhas' }}{% endblock %}
+
+{% block main_content %}
+
+    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 30px;">
+        <h2 style="margin-top: 0; color: #333;">{{ 'Editar Tipo de Alarme (TX)' if tipo_alarme else 'Cadastrar Novo Tipo de Alarme (TX)' }}</h2>
+        <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Alarmes de Transmissão (DWDM, OTDR, Abertura de Enlace).</p>
+
+        <form method="POST" action="{{ url_for('cadastrar_ou_editar_tipo_alarme', tipo_alarme_id=tipo_alarme.id if tipo_alarme else None) }}">
+            <label for="nome_tipo_alarme">Nome do Tipo de Alarme:</label>
+            <input type="text" id="nome_tipo_alarme" name="nome_tipo_alarme" 
+                   value="{{ tipo_alarme.nome_tipo_alarme if tipo_alarme else '' }}" required>
+
+            <label for="equipe_responsavel">Equipe Responsável:</label>
+            <select id="equipe_responsavel" name="equipe_responsavel" required>
+                <option value="">Selecione a Equipe</option>
+                <option value="FMO" {% if tipo_alarme and tipo_alarme.equipe_responsavel == 'FMO' %}selected{% endif %}>FMO (Rompimento de Fibra)</option>
+                <option value="FMMT" {% if tipo_alarme and tipo_alarme.equipe_responsavel == 'FMMT' %}selected{% endif %}>FMMT (Hardware)</option>
+                <option value="Ambas" {% if tipo_alarme and tipo_alarme.equipe_responsavel == 'Ambas' %}selected{% endif %}>Ambas</option>
+                <option value="N/A" {% if tipo_alarme and tipo_alarme.equipe_responsavel == 'N/A' %}selected{% endif %}>N/A (Não Aplicável)</option>
+            </select>
+
+            <label for="tipo_alarme_pai_id">Alarme Pai (Opcional):</label>
+            <select id="tipo_alarme_pai_id" name="tipo_alarme_pai_id">
+                <option value="">-- Nenhum (Este é um alarme principal) --</option>
+                {% for pai in todos_tipos_alarmes %}
+                    <option value="{{ pai.id }}" {% if tipo_alarme and tipo_alarme.tipo_alarme_pai_id == pai.id %}selected{% endif %}>
+                        {{ pai.nome_tipo_alarme }}
+                    </option>
+                {% endfor %}
+            </select>
+            <p class="small-text">Selecione se este alarme é um sintoma de outro alarme mais geral.</p>
+
+            <div style="margin-top: 10px; margin-bottom: 10px;">
+                <label for="eh_abertura_enlace_trigger" style="display: flex; align-items: center; gap: 8px; font-weight: normal;">
+                    <input type="checkbox" id="eh_abertura_enlace_trigger" name="eh_abertura_enlace_trigger" 
+                           {% if tipo_alarme and tipo_alarme.eh_abertura_enlace_trigger %}checked{% endif %}>
+                    Este tipo de alarme pode indicar uma "Abertura de Enlace"?
+                </label>
+            </div>
+
+            <button type="submit" style="background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">
+                {{ 'Atualizar Tipo de Alarme' if tipo_alarme else 'Cadastrar Tipo de Alarme' }}
+            </button>
+            
+            {% if tipo_alarme %}
+                <a href="{{ url_for('cadastrar_ou_editar_tipo_alarme') }}" style="margin-left: 10px; color: #666; text-decoration: none;">Cancelar Edição</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <hr style="border: 0; border-top: 2px dashed #ccc; margin: 30px 0;">
+
+    {% if not tipo_alarme %}
+    
+    <div style="background-color: #e0f7fa; padding: 20px; border-radius: 8px; border: 1px solid #b2ebf2; margin-bottom: 20px;">
+        <h2 style="margin-top: 0; color: #006064;">Cadastrar Alarme de Equipamento (Dados/IP)</h2>
+        <p style="color: #006064; font-size: 0.9em; margin-bottom: 15px;">Alarmes específicos dos Roteadores/Switches (Ex: BGP Down, OSPF Neighbor Down, CPU High).</p>
+
+        <form method="POST" action="{{ url_for('cadastrar_alarme_dados') }}">
+            <label for="nome_alarme_dados" style="color: #006064; font-weight: bold;">Nome do Alarme:</label>
+            <input type="text" id="nome_alarme_dados" name="nome_alarme_dados" required 
+                   placeholder="Ex: BGP Peer Down"
+                   style="border: 1px solid #00acc1; padding: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px;">
+            
+            <button type="submit" style="background-color: #00838f; color: white; font-weight: bold; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+                Salvar Alarme Equipamento
+            </button>
+        </form>
+    </div>
+
+    <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; border: 1px solid #ffe0b2;">
+        <h2 style="margin-top: 0; color: #e65100;">Cadastrar Tipo de Falha no Circuito (ACCID)</h2>
+        <p style="color: #e65100; font-size: 0.9em; margin-bottom: 15px;">Classificação do impacto no serviço (Ex: Link Down, Latência Alta, Perda de Pacotes).</p>
+
+        <form method="POST" action="{{ url_for('cadastrar_tipo_falha') }}">
+            <label for="nome_tipo_falha" style="color: #e65100; font-weight: bold;">Descrição da Falha:</label>
+            <input type="text" id="nome_tipo_falha" name="nome_tipo_falha" required 
+                   placeholder="Ex: Latência Alta (>100ms)"
+                   style="border: 1px solid #ffb74d; padding: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px;">
+            
+            <button type="submit" style="background-color: #ef6c00; color: white; font-weight: bold; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer;">
+                Salvar Tipo de Falha
+            </button>
+        </form>
+    </div>
+
+    {% endif %}
+
+    <br>
+    <div style="text-align: center;">
+        <a href="{{ url_for('consultar_tipos_alarmes') }}" style="text-decoration: none; color: #555;">&larr; Voltar para Lista de Consultas</a>
+    </div>
+
+{% endblock %}

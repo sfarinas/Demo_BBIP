@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Eventos{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Função para mostrar mensagens temporárias (similar ao flash do Flask)
+        function showMessage(message, type = 'success') {
+            const messageBox = document.getElementById('global-message-box');
+            if (messageBox) {
+                messageBox.textContent = message;
+                messageBox.className = 'message-box ' + type;
+                messageBox.style.display = 'block';
+                setTimeout(() => {
+                    messageBox.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // Lógica para o pop-up de edição do título do evento
+        const editTitleModal = document.getElementById('editTitleModal');
+        const closeModal = document.querySelector('.close-button');
+        const saveTitleButton = document.getElementById('saveTitleButton');
+        const newTitleInput = document.getElementById('newTitleInput');
+        let currentEventId = null;
+
+        document.querySelectorAll('.edit-title-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                currentEventId = this.dataset.eventId;
+                const currentTitle = this.dataset.currentTitle;
+                newTitleInput.value = currentTitle;
+                editTitleModal.style.display = 'block';
+            });
+        });
+
+        closeModal.addEventListener('click', function() {
+            editTitleModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', function(event) {
+            if (event.target == editTitleModal) {
+                editTitleModal.style.display = 'none';
+            }
+        });
+
+        saveTitleButton.addEventListener('click', async function() {
+            const newTitle = newTitleInput.value.trim();
+            if (!newTitle) {
+                showMessage('O título não pode estar vazio.', 'danger');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/update_event_title/${currentEventId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ new_title: newTitle })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    editTitleModal.style.display = 'none';
+                    // Atualiza o título na célula da tabela sem recarregar a página
+                    const titleElement = document.querySelector(`p[data-event-id="${currentEventId}"][data-field="titulo_evento"]`);
+                    if (titleElement) {
+                        titleElement.textContent = newTitle;
+                        // Atualiza o data-current-title para futuras edições
+                        const editButton = document.querySelector(`.edit-title-btn[data-event-id="${currentEventId}"]`);
+                        if(editButton) {
+                            editButton.dataset.currentTitle = newTitle;
+                        }
+                    }
+                } else {
+                    showMessage(data.message, 'danger');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar o título:', error);
+                showMessage('Erro ao conectar com o servidor.', 'danger');
+            }
+        });
+    });
+</script>
+
+<style>
+    /* Estilos para o Modal de Edição de Título */
+    .modal {
+        display: none; /* Hidden by default */
+        position: fixed; /* Stay in place */
+        z-index: 100; /* Sit on top */
+        left: 0;
+        top: 0;
+        width: 100%; /* Full width */
+        height: 100%; /* Full height */
+        overflow: auto; /* Enable scroll if needed */
+        background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-content {
+        background-color: #fefefe;
+        margin: auto; /* Centered */
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%; /* Could be more responsive */
+        max-width: 500px;
+        border-radius: 8px;
+        position: relative;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .close-button {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+    }
+
+    .close-button:hover,
+    .close-button:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .modal-content h3 {
+        margin-top: 0;
+        color: #333;
+    }
+
+    .modal-content input[type="text"] {
+        width: calc(100% - 22px);
+        padding: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .modal-content button {
+        background-color: #3498db;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        transition: background-color 0.3s ease;
+    }
+
+    .modal-content button:hover {
+        background-color: #2980b9;
+    }
+
+    /* Message Box for AJAX messages */
+    .message-box {
+        display: none;
+        padding: 10px;
+        margin-bottom: 15px;
+        border-radius: 5px;
+        font-weight: bold;
+        text-align: center;
+    }
+    .message-box.success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    .message-box.danger {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+    
+    /* BADGES (Novos Estilos para Identificação Visual) */
+    .badge {
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: bold;
+        color: white;
+        display: inline-block;
+        white-space: nowrap;
+    }
+    .badge-dados { background-color: #17a2b8; } /* Ciano (DADOS) */
+    .badge-rompimento { background-color: #dc3545; } /* Vermelho */
+    .badge-hw { background-color: #007bff; } /* Azul */
+    .badge-link { background-color: #6f42c1; } /* Roxo */
+    .badge-default { background-color: #6c757d; } /* Cinza */
+</style>
+{% endblock %}
+
+{% block main_content %}
+    <h2>Relatório de Eventos</h2>
+    <p>Visualize e gerencie todos os eventos registrados no sistema.</p>
+
+    <div class="filter-nav-container" style="background-color: #f0f0f0; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px;">
+
+        <form method="GET" action="{{ url_for('relatorio_eventos') }}" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+            <div>
+                <label for="ano" style="margin-bottom: 5px; display: block;">Ano:</label>
+                <input type="number" id="ano" name="ano" value="{{ filtro_ano or '' }}" placeholder="YYYY" style="width: 100px;">
+            </div>
+            <div>
+                <label for="mes" style="margin-bottom: 5px; display: block;">Mês:</label>
+                <input type="number" id="mes" name="mes" value="{{ filtro_mes or '' }}" placeholder="MM" min="1" max="12" style="width: 80px;">
+            </div>
+            <div>
+                <label for="dia" style="margin-bottom: 5px; display: block;">Dia:</label>
+                <input type="number" id="dia" name="dia" value="{{ filtro_dia or '' }}" placeholder="DD" min="1" max="31" style="width: 80px;">
+            </div>
+            <div style="align-self: flex-end;">
+                <button type="submit" class="button">Filtrar</button>
+                <a href="{{ url_for('relatorio_eventos') }}" class="button" style="background-color: #7f8c8d;">Limpar (Hoje)</a>
+            </div>
+        </form>
+
+        <div class="date-navigation" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                {% if nav_dates.prev_day %}
+                    <a href="{{ url_for('relatorio_eventos', ano=nav_dates.prev_day.year, mes=nav_dates.prev_day.month, dia=nav_dates.prev_day.day) }}" class="button">&laquo; Dia Anterior</a>
+                {% endif %}
+                {% if nav_dates.prev_month %}
+                    <a href="{{ url_for('relatorio_eventos', ano=nav_dates.prev_month.year, mes=nav_dates.prev_month.month) }}" class="button">&laquo; Mês Anterior</a>
+                {% endif %}
+            </div>
+            <div>
+                {% if nav_dates.next_month %}
+                    <a href="{{ url_for('relatorio_eventos', ano=nav_dates.next_month.year, mes=nav_dates.next_month.month) }}" class="button">Próximo Mês &raquo;</a>
+                {% endif %}
+                {% if nav_dates.next_day %}
+                    <a href="{{ url_for('relatorio_eventos', ano=nav_dates.next_day.year, mes=nav_dates.next_day.month, dia=nav_dates.next_day.day) }}" class="button">Próximo Dia &raquo;</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if eventos %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background-color: #e9ecef; border-bottom: 2px solid #ced4da;">
+                    <th style="padding: 10px; text-align: center; width: 50px;">ID</th>
+                    <th style="padding: 10px; text-align: left;">Título do Evento</th>
+                    <th style="padding: 10px; text-align: left; width: 35%;">Descrição Resumida</th>
+                    <th style="padding: 10px; text-align: center;">Abertura</th>
+                    <th style="padding: 10px; text-align: center;">Tipo</th>
+                    <th style="padding: 10px; text-align: center;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for evento in eventos %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px; text-align: center; color: #666;">{{ evento.id }}</td>
+                    <td style="padding: 10px;">
+                        <p data-event-id="{{ evento.id }}" data-field="titulo_evento" style="font-weight: bold; margin-bottom: 5px;">{{ evento.titulo }}</p>
+                        <button class="edit-title-btn" data-event-id="{{ evento.id }}" data-current-title="{{ evento.titulo }}" style="font-size: 0.75em; padding: 2px 5px;">Editar Título</button>
+                    </td>
+                    <td style="padding: 10px;">
+                        <div style="max-height: 80px; overflow-y: auto; font-size: 0.9em; color: #444; white-space: pre-wrap;">{{ evento.descricao }}</div>
+                    </td>
+                    <td style="padding: 10px; text-align: center; font-size: 0.9em;">
+                        {{ evento.data_hora_abertura | strftime('%d/%m/%Y %H:%M') }}
+                    </td>
+                    
+                    <td style="padding: 10px; text-align: center;">
+                        {% if evento.tipo_evento == 'DADOS' %}
+                            <span class="badge badge-dados">BBIP/DADOS</span>
+                        {% elif evento.tipo_evento == 'Rompimento de Fibra' %}
+                            <span class="badge badge-rompimento">ROMPIMENTO</span>
+                        {% elif evento.tipo_evento == 'Falha de Link de Capacidade' %}
+                            <span class="badge badge-link">LINK CAP</span>
+                        {% elif evento.tipo_evento == 'Alarme de Hardware' %}
+                            <span class="badge badge-hw">HARDWARE</span>
+                        {% else %}
+                            <span class="badge badge-default">{{ evento.tipo_evento or 'Geral' }}</span>
+                        {% endif %}
+                        
+                        {% if evento.teste_otdr_em_curso %}
+                            <div style="font-size: 0.75em; margin-top: 4px; color: #dc3545;">(OTDR Ativo)</div>
+                        {% endif %}
+                    </td>
+
+                    <td style="padding: 10px; text-align: center;">
+                        {% if evento.tipo_evento == 'DADOS' %}
+                            <a href="{{ url_for('detalhes_evento_dados', evento_id=evento.id) }}" class="button" style="background-color: #17a2b8; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 0.9em;">
+                                Ver Detalhes 🔍
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('detalhes_evento', evento_id=evento.id) }}" class="button" style="background-color: #6c757d; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 0.9em;">
+                                Ver Detalhes
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div style="text-align: center; padding: 40px; background-color: #fff; border: 1px dashed #ccc; margin-top: 20px;">
+            <p style="color: #777;">Nenhum evento registrado para a data selecionada.</p>
+        </div>
+    {% endif %}
+
+    <div id="editTitleModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h3>Editar Título do Evento</h3>
+            <div id="global-message-box" class="message-box"></div>
+            <label for="newTitleInput">Novo Título:</label>
+            <input type="text" id="newTitleInput" name="new_title">
+            <button id="saveTitleButton">Salvar</button>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Evento: {{ evento.titulo }}{% endblock %}
+
+{% block main_content %}
+    <h2>Detalhes do Evento: {{ evento.titulo }}</h2>
+    <p>Aqui você pode ver todas as informações detalhadas sobre este evento.</p>
+
+    {% if evento %}
+        <div class="report-section">
+            <h3>Informações Gerais do Evento:</h3>
+            <div class="info-columns">
+                <div class="info-column">
+                    <p><strong>ID do Evento:</strong> {{ evento.id }}</p>
+                    <p><strong>Título:</strong> {{ evento.titulo }}</p>
+                    <p><strong>Tipo de Evento:</strong> {{ evento.tipo_evento }}</p>
+                </div>
+                <div class="info-column">
+                    <p><strong>Data/Hora de Abertura:</strong> {{ moment(evento.data_hora_abertura).format('DD/MM/YYYY HH:mm:ss') }}</p>
+                    <p><strong>Próxima Atualização:</strong> 
+                        {% if evento.proxima_atualizacao %}
+                            {{ moment(evento.proxima_atualizacao).format('DD/MM/YYYY HH:mm') }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="report-section">
+            <h3 style="display: inline-block; margin-right: 10px;">Descrição Completa do Evento:</h3>
+            <button id="copyDescriptionBtn" class="copy-button">Copiar Descrição</button>
+            <span id="copyFeedback" style="margin-left: 10px; color: green; font-weight: bold; display: none;">Copiado!</span>
+            <p class="small-text">Esta seção contém o relatório detalhado do evento, incluindo o resumo e as regras OTDR conforme gerado.</p>
+            <pre id="eventDescription" style="white-space: pre-wrap; word-wrap: break-word; background-color: #f0f0f0; padding: 10px; border-radius: 5px;">{{ descricao_formatada }}</pre>
+        </div>
+
+        <div class="report-section">
+            <h3>Elementos Afetados:</h3>
+            {% if elementos_do_evento %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome do Elemento</th>
+                            <th>Gerência</th>
+                            <th>ACCID/LC</th>
+                            <th>Longa Distância</th>
+                            <th>Provedor da Fibra</th>
+                            <th>Estado Atual</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for elemento in elementos_do_evento %}
+                        <tr>
+                            <td><a href="{{ url_for('detalhes_elemento', elemento_id=elemento.id) }}">{{ elemento.nome_elemento }}</a></td>
+                            <td>{{ elemento.nome_gerencia }}</td>
+                            <td>{{ accid_lc_for_display if loop.first else 'N/A' }}</td>
+                            <td>{% if elemento.longa_distancia %}Sim{% else %}Não{% endif %}</td>
+                            <td>{{ elemento.nome_detentor }}</td>
+                            <td>{{ elemento.estado_atual if elemento.estado_atual else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Nenhum elemento associado a este evento.</p>
+            {% endif %}
+        </div>
+        
+        <div class="report-section">
+            <h3>Informações de Vizinhança:</h3>
+            <p><strong>ACCID/LC da Vizinhança:</strong> {{ accid_lc_for_display }}</p>
+            <p><strong>Swap de Fibra:</strong> {{ swap_fibra_for_display }}</p>
+        </div>
+
+        <div class="report-section">
+            <h3>Alarmes Relacionados:</h3>
+            {% if alarmes_do_evento %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Elemento</th>
+                            <th>Tipo de Alarme</th>
+                            <th>Data/Hora</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alarme in alarmes_do_evento %}
+                        <tr>
+                            <td>{{ alarme.nome_elemento }}</td>
+                            <td>{{ alarme.tipo_alarme }}</td>
+                            <td>{{ moment(alarme.data_hora).format('DD/MM/YYYY HH:mm:ss') if alarme.data_hora else 'N/A' }}</td>
+                            <td>{{ alarme.descricao if alarme.descricao else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>Nenhum alarme associado a este evento.</p>
+            {% endif %}
+        </div>
+
+        <p style="margin-top: 20px;">
+            <a href="{{ url_for('relatorio_eventos') }}" class="button">Voltar para Relatório de Eventos</a>
+        </p>
+    {% else %}
+        <p>Evento não encontrado.</p>
+    {% endif %}
+{% endblock %}
+
+{% block scripts_extra %}
+<style>
+    .report-section {
+        margin-bottom: 30px;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background-color: #fdfdfd;
+    }
+    .report-section h3 {
+        color: #333;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 8px;
+        margin-bottom: 15px;
+    }
+    .info-columns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+    .info-column {
+        flex: 1;
+        min-width: 280px;
+    }
+    .copy-button {
+        background-color: #28a745;
+        color: white;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9em;
+        transition: background-color 0.3s ease;
+    }
+    .copy-button:hover {
+        background-color: #218838;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const copyButton = document.getElementById('copyDescriptionBtn');
+        const eventDescription = document.getElementById('eventDescription');
+        const copyFeedback = document.getElementById('copyFeedback');
+
+        if (copyButton && eventDescription) {
+            copyButton.addEventListener('click', function() {
+                const textToCopy = eventDescription.innerText;
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = textToCopy;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                tempTextArea.setSelectionRange(0, 99999);
+                try {
+                    document.execCommand('copy');
+                    copyFeedback.style.display = 'inline';
+                    setTimeout(() => {
+                        copyFeedback.style.display = 'none';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Falha ao copiar o texto: ', err);
+                    alert('Erro ao copiar a descrição. Por favor, tente novamente manualmente.');
+                } finally {
+                    document.body.removeChild(tempTextArea);
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

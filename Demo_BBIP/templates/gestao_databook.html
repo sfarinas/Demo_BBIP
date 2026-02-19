@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestão Databook - Inventário TX</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* --- CORREÇÃO DO FUNDO (Adicione isto) --- */
+        body {
+            background-color: #1a1a1a; /* Garante fundo escuro */
+            color: #e0e0e0;            /* Garante texto claro */
+            font-family: Arial, sans-serif;
+            margin: 0;
+        }
+        /* ---------------------------------------- */
+
+        /* Estilos específicos para esta página */
+        .databook-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .search-bar { width: 100%; padding: 12px; font-size: 16px; margin-bottom: 20px; background: #333; color: white; border: 1px solid #555; border-radius: 5px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { padding: 10px; border-bottom: 1px solid #444; text-align: left; }
+        th { background-color: #222; color: #aaa; }
+        
+        /* Cor da linha e hover */
+        tr { background-color: #1a1a1a; } /* Garante que a linha tenha cor */
+        tr:hover { background-color: #2a2a2a; } /* Efeito ao passar o mouse */
+        
+        .btn-edit { background-color: #2196F3; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px; }
+        .btn-edit:hover { background-color: #1976D2; }
+
+        /* Estilos do Modal (Janela Flutuante) */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); }
+        .modal-content { background-color: #1e1e1e; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 50%; max-width: 500px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #fff; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #ccc; }
+        .form-group input { width: 100%; padding: 8px; background: #333; border: 1px solid #555; color: white; border-radius: 4px; box-sizing: border-box; }
+        
+        .tag-empty { color: #555; font-style: italic; font-size: 0.9em; }
+        .tag-filled { color: #00e676; font-weight: bold; background: rgba(0, 230, 118, 0.1); padding: 2px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    
+    <div style="background: #222; padding: 10px; border-bottom: 2px solid #444; display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="margin: 0; color: #00e676;">📂 Gestão de Databook (Inventário)</h2>
+        <div>
+            <a href="{{ url_for('index') }}" class="btn" style="background: #555; color: white; text-decoration: none; padding: 8px 15px; border-radius: 4px;">🏠 Voltar ao Início</a>
+        </div>
+    </div>
+
+    <div class="databook-container">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" style="padding: 10px; background: #333; border-left: 5px solid {{ '#4CAF50' if category == 'success' else '#F44336' }}; margin-bottom: 20px;">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <input type="text" id="searchInput" class="search-bar" placeholder="🔍 Pesquisar por Nome, Site ID, Cidade..." onkeyup="filterTable()">
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome do Elemento (Sistema)</th>
+                    <th>Site ID (Sigla)</th>
+                    <th>Cidade / UF</th>
+                    <th>Endereço</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                {% for elem in elementos %}
+                <tr>
+                    <td style="color: #fff; font-weight: bold;">{{ elem.nome_elemento }}</td>
+                    
+                    <td>
+                        {% if elem.site_id %}
+                            <span class="tag-filled">{{ elem.site_id }}</span>
+                        {% else %}
+                            <span class="tag-empty">--</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td>
+                        {% if elem.cidade %}
+                            {{ elem.cidade }} - {{ elem.uf }}
+                        {% else %}
+                            <span class="tag-empty">--</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td>
+                        {% if elem.endereco %}
+                            {{ elem.endereco[:30] }}...
+                        {% else %}
+                            <span class="tag-empty">--</span>
+                        {% endif %}
+                    </td>
+                    
+                    <td>
+                        <button class="btn-edit" onclick="openModal('{{ elem.id }}', '{{ elem.nome_elemento }}', '{{ elem.site_id or '' }}', '{{ elem.sigla_cidade or '' }}', '{{ elem.cidade or '' }}', '{{ elem.uf or '' }}', '{{ elem.endereco or '' }}')">
+                            ✏️ Editar
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 style="color: #2196F3; margin-top: 0;">Editar Databook</h3>
+            <p id="modalElementName" style="color: #fff; border-bottom: 1px solid #444; padding-bottom: 10px;"></p>
+
+            <form action="{{ url_for('gestao_databook') }}" method="POST">
+                <input type="hidden" id="editId" name="id">
+
+                <div class="form-group">
+                    <label>Site ID (Ex: ROJAW_0002):</label>
+                    <input type="text" id="editSiteId" name="site_id" placeholder="Digite o ID do Databook">
+                </div>
+
+                <div class="form-group">
+                    <label>Sigla Cidade (Ex: JAW):</label>
+                    <input type="text" id="editSigla" name="sigla_cidade" placeholder="3 ou 4 letras">
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 3;">
+                        <label>Cidade:</label>
+                        <input type="text" id="editCidade" name="cidade" placeholder="Nome da Cidade">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>UF:</label>
+                        <input type="text" id="editUF" name="uf" placeholder="RO">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Endereço Físico:</label>
+                    <input type="text" id="editEndereco" name="endereco" placeholder="Rua, Número, Bairro...">
+                </div>
+
+                <div style="text-align: right; margin-top: 20px;">
+                    <button type="button" onclick="closeModal()" style="background: #555; border: none; color: white; padding: 10px 20px; cursor: pointer; margin-right: 10px;">Cancelar</button>
+                    <button type="submit" style="background: #4CAF50; border: none; color: white; padding: 10px 20px; cursor: pointer; font-weight: bold;">💾 SALVAR DADOS</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Função de Filtro da Tabela
+        function filterTable() {
+            var input, filter, table, tr, td, i, txtValue;
+            input = document.getElementById("searchInput");
+            filter = input.value.toUpperCase();
+            table = document.getElementById("tableBody");
+            tr = table.getElementsByTagName("tr");
+
+            for (i = 0; i < tr.length; i++) {
+                var visible = false;
+                var tds = tr[i].getElementsByTagName("td");
+                for (var j = 0; j < tds.length - 1; j++) { // Não verifica a coluna Ação
+                    if (tds[j]) {
+                        txtValue = tds[j].textContent || tds[j].innerText;
+                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                            visible = true;
+                        }
+                    }
+                }
+                tr[i].style.display = visible ? "" : "none";
+            }
+        }
+
+        // Funções do Modal
+        var modal = document.getElementById("editModal");
+
+        function openModal(id, nome, siteId, sigla, cidade, uf, endereco) {
+            document.getElementById("editId").value = id;
+            document.getElementById("modalElementName").innerText = "Elemento: " + nome;
+            document.getElementById("editSiteId").value = siteId;
+            document.getElementById("editSigla").value = sigla;
+            document.getElementById("editCidade").value = cidade;
+            document.getElementById("editUF").value = uf;
+            document.getElementById("editEndereco").value = endereco;
+            
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            modal.style.display = "none";
+        }
+
+        // Fecha o modal se clicar fora dele
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>

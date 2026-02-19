@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Topologia (Vizinhança e Anel){% endblock %}
+
+{% block scripts_extra %}
+<style>
+    /* Estilos de autocomplete para consistência visual */
+    .autocomplete-container { position: relative; }
+    .autocomplete-suggestions { position: absolute; border: 1px solid #ddd; border-top: none; z-index: 99; top: 100%; left: 0; right: 0; background-color: white; max-height: 200px; overflow-y: auto; }
+    .autocomplete-suggestion-item { padding: 10px; cursor: pointer; }
+    .autocomplete-suggestion-item:hover { background-color: #e9e9e9; }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Seleção de todos os elementos do formulário ---
+        const nomeElemento1Input = document.getElementById('nome_elemento1');
+        const nomeElemento2Input = document.getElementById('nome_elemento2');
+        const suggestions1Div = document.getElementById('suggestions1');
+        const suggestions2Div = document.getElementById('suggestions2');
+        const gerenciaSelect = document.getElementById('gerencia_id');
+        const longaDistanciaCheckbox = document.getElementById('longa_distancia_comum');
+        const anelSelect = document.getElementById('anel_id_select');
+        const novoAnelInput = document.getElementById('novo_anel_nome');
+        const swapFibraInfoInput = document.getElementById('swap_fibra_info');
+        const estadoOrigemSelect = document.getElementById('estado_origem_id_select');
+        const novoEstadoOrigemInput = document.getElementById('novo_estado_origem_nome');
+        const estadoDestinoSelect = document.getElementById('estado_destino_id_select');
+        const novoEstadoDestinoInput = document.getElementById('novo_estado_destino_nome');
+
+        // --- Lógica de Autocomplete (incluindo autopreenchimento do vizinho) ---
+        function setupAutocomplete(inputElement, suggestionsDiv, otherInputElement) {
+            inputElement.addEventListener('input', async function() {
+                const query = this.value;
+                suggestionsDiv.innerHTML = '';
+                if (query.length < 3) {
+                    suggestionsDiv.style.display = 'none';
+                    return;
+                }
+                const response = await fetch(`/search_elementos?q=${encodeURIComponent(query)}`);
+                const suggestions = await response.json();
+                if (suggestions.length > 0) {
+                    suggestionsDiv.style.display = 'block';
+                    suggestions.forEach(item => {
+                        const div = document.createElement('div');
+                        div.textContent = item.nome_elemento;
+                        div.classList.add('autocomplete-suggestion-item');
+                        div.addEventListener('click', function() {
+                            inputElement.value = item.nome_elemento;
+                            suggestionsDiv.style.display = 'none';
+                            inputElement.dispatchEvent(new Event('change'));
+                            if (item.nome_vizinho && otherInputElement.value.trim() === '') {
+                                otherInputElement.value = item.nome_vizinho;
+                                otherInputElement.dispatchEvent(new Event('change'));
+                            }
+                        });
+                        suggestionsDiv.appendChild(div);
+                    });
+                }
+            });
+            document.addEventListener('click', e => { if (e.target !== inputElement) suggestionsDiv.style.display = 'none'; });
+        }
+
+        // --- Lógica para preencher dados ao selecionar um elemento ---
+        async function fetchElementDetailsAndFill(elementName, isElement1 = true) {
+            if (!elementName) return;
+            try {
+                const response = await fetch('/get_element_details', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ element_name: elementName }) });
+                const data = await response.json();
+                if (data.success && data.element) {
+                    const element = data.element;
+                    if (gerenciaSelect.value === '') gerenciaSelect.value = element.gerencia_id || '';
+                    if (!longaDistanciaCheckbox.checked) longaDistanciaCheckbox.checked = element.longa_distancia || false;
+                    
+                    const select = isElement1 ? estadoOrigemSelect : estadoDestinoSelect;
+                    const input = isElement1 ? novoEstadoOrigemInput : novoEstadoDestinoInput;
+                    updateDualInputState(select, input, element.estado_atual_id);
+
+                    if (isElement1 && element.aneis_ids && element.aneis_ids.length > 0) {
+                       anelSelect.value = element.aneis_ids[0];
+                       novoAnelInput.value = '';
+                    }
+                }
+            } catch (error) { console.error(`Erro ao buscar detalhes:`, error); } finally {
+                // Sempre tenta buscar detalhes da vizinhança após preencher um elemento
+                fetchVizinhançaDetailsAndFill();
+            }
+        }
+        
+        // --- Lógica para preencher dados da vizinhança (Swap) ---
+        async function fetchVizinhançaDetailsAndFill() {
+            const elem1Name = nomeElemento1Input.value.trim();
+            const elem2Name = nomeElemento2Input.value.trim();
+            const accidLcComumInput = document.getElementById('accid_lc_comum'); // Adicione esta linha
+            if (!elem1Name || !elem2Name) return;
+            try {
+                const response = await fetch('/get_vizinhança_details', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ element_origem_name: elem1Name, element_destino_name: elem2Name }) });
+                const data = await response.json();
+                if (data.success && data.vizinhança) {
+                    // Adiciona o preenchimento do ACCID/LC
+                    accidLcComumInput.value = data.vizinhança.accid_lc || ''; 
+                    swapFibraInfoInput.value = data.vizinhança.swap_fibra_info || 'TIM';
+                }
+            } catch (error) { console.error('Erro ao buscar vizinhança:', error); }
+        }
+
+        // --- Lógica para campos duplos (select ou input) ---
+        function setupDualInput(selectElement, newInputElement) {
+            newInputElement.addEventListener('input', () => { if (newInputElement.value.trim()) selectElement.value = ''; });
+            selectElement.addEventListener('change', () => { if (selectElement.value) newInputElement.value = ''; });
+        }
+        function updateDualInputState(select, input, value) {
+            if (value) {
+                if (!isNaN(value) && select.querySelector(`option[value="${value}"]`)) {
+                    select.value = value; input.value = '';
+                } else {
+                    input.value = String(value); select.value = '';
+                }
+            } else {
+                select.value = ''; input.value = '';
+            }
+        }
+
+        // --- Inicialização ---
+        setupAutocomplete(nomeElemento1Input, suggestions1Div, nomeElemento2Input);
+        setupAutocomplete(nomeElemento2Input, suggestions2Div, nomeElemento1Input);
+        nomeElemento1Input.addEventListener('change', () => fetchElementDetailsAndFill(nomeElemento1Input.value.trim(), true));
+        nomeElemento2Input.addEventListener('change', () => fetchElementDetailsAndFill(nomeElemento2Input.value.trim(), false));
+        setupDualInput(anelSelect, novoAnelInput);
+        setupDualInput(estadoOrigemSelect, novoEstadoOrigemInput);
+        setupDualInput(estadoDestinoSelect, novoEstadoDestinoInput);
+    });
+</script>
+{% endblock %}
+
+{% block main_content %}
+    <h2>Cadastro de Topologia (Vizinhança e Anel)</h2>
+    <p>Cadastre uma nova vizinhança. Elementos e anéis não existentes serão criados automaticamente. Ao selecionar um elemento, seus dados serão preenchidos.</p>
+    <form method="POST">
+        <h3>Dados dos Elementos</h3>
+        <label for="nome_elemento1">Nome do Elemento 1:</label>
+        <div class="autocomplete-container">
+            <input type="text" id="nome_elemento1" name="nome_elemento1" required value="{{ prev_data.nome_elemento1 | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+            <div class="autocomplete-suggestions" id="suggestions1"></div>
+        </div>
+
+        <label for="nome_elemento2">Nome do Elemento Vizinho:</label>
+        <div class="autocomplete-container">
+            <input type="text" id="nome_elemento2" name="nome_elemento2" required value="{{ prev_data.nome_elemento2 | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+            <div class="autocomplete-suggestions" id="suggestions2"></div>
+        </div>
+        
+        <h3>Dados Comuns</h3>
+        <label for="gerencia_id">Gerência dos Elementos:</label>
+        <select id="gerencia_id" name="gerencia_id" required>
+            <option value="">Selecione uma Gerência</option>
+            {% for gerencia in gerencias %}
+                <option value="{{ gerencia.id }}" {% if prev_data.gerencia_id|string == gerencia.id|string %}selected{% endif %}>
+                    {{ gerencia.nome_gerencia }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <label for="accid_lc_comum">ACCID/LC (Opcional):</label>
+        <input type="text" id="accid_lc_comum" name="accid_lc_comum" value="{{ prev_data.accid_lc_comum | default('') }}">
+        <p class="small-text">Este campo será preenchido automaticamente se a vizinhança já existir.</p>
+        
+        <label for="longa_distancia_comum">Longa Distância:
+            <input type="checkbox" id="longa_distancia_comum" name="longa_distancia_comum" {% if prev_data.longa_distancia_comum == 'on' %}checked{% endif %}> Sim
+        </label>
+        
+        <label for="swap_fibra_info">Swap de Fibra (Opcional - Padrão 'TIM'):</label>
+        <input type="text" id="swap_fibra_info" name="swap_fibra_info" value="{{ prev_data.swap_fibra_info | default('TIM') }}" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+        <p class="small-text">Este campo será atualizado se a vizinhança já existir.</p>
+
+        <h3>Dados de Estado</h3>
+        <label for="estado_origem_id_select">Estado do Elemento 1 (Origem):</label>
+        <select id="estado_origem_id_select" name="estado_origem_id_select">
+            <option value="">Selecione um Estado</option>
+            {% for estado in estados_enlace %}
+                <option value="{{ estado.id }}" {% if prev_data.estado_origem_id_select|string == estado.id|string %}selected{% endif %}>
+                    {{ estado.nome_estado }}
+                </option>
+            {% endfor %}
+        </select>
+        <input type="text" id="novo_estado_origem_nome" name="novo_estado_origem_nome" placeholder="Ou crie um novo estado aqui..." value="{{ prev_data.novo_estado_origem_nome | default('') }}">
+        
+        <label for="estado_destino_id_select">Estado do Elemento 2 (Destino):</label>
+        <select id="estado_destino_id_select" name="estado_destino_id_select">
+            <option value="">Selecione um Estado</option>
+            {% for estado in estados_enlace %}
+                <option value="{{ estado.id }}" {% if prev_data.estado_destino_id_select|string == estado.id|string %}selected{% endif %}>
+                    {{ estado.nome_estado }}
+                </option>
+            {% endfor %}
+        </select>
+        <input type="text" id="novo_estado_destino_nome" name="novo_estado_destino_nome" placeholder="Ou crie um novo estado aqui..." value="{{ prev_data.novo_estado_destino_nome | default('') }}">
+
+        <h3>Associação ao Anel (Obrigatório)</h3>
+        <label for="anel_id_select">Selecione um Anel existente:</label>
+        <select id="anel_id_select" name="anel_id_select">
+            <option value="">Selecione um Anel</option>
+            {% for anel in aneis %}
+                <option value="{{ anel.id }}" {% if prev_data.anel_id_select|string == anel.id|string %}selected{% endif %}>{{ anel.nome_anel }}</option>
+            {% endfor %}
+        </select>
+        <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo anel:</p>
+        <input type="text" id="novo_anel_nome" name="novo_anel_nome" value="{{ prev_data.novo_anel_nome | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+        <p class="small-text">Se digitar um novo nome, ele terá prioridade sobre a seleção.</p>
+
+        <button type="submit">Salvar Vizinhança e Anel</button>
+    </form>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro Rápido - Etapa 2/2: Finalizar Relatório{% endblock %}
+
+{% block main_content %}
+    <h2>Cadastro Rápido de Elementos de Anel e Vizinhança - Etapa 2/2: Finalizar Relatório</h2>
+    <p>Revise as informações e finalize o cadastro do evento.</p>
+
+    <h3>Detalhes Resumidos dos Elementos:</h3>
+    <p><strong>Elemento 1:</strong> {{ final_data.nome_elemento1 }} (Gerência: {{ database.get_gerencia_by_id(final_data.elemento1_gerencia_id) }})</p>
+    <p><strong>Elemento Vizinho:</strong> {{ final_data.nome_elemento2 }} (Gerência: {{ database.get_gerencia_by_id(final_data.elemento2_gerencia_id) }})</p>
+    <p><strong>Anel:</strong> {{ database.get_anel_by_id(final_data.anel_id).nome_anel if database.get_anel_by_id(final_data.anel_id) else 'N/A' }}</p>
+    <p><strong>Alarme do Elemento 1:</strong> {{ database.get_tipo_alarme_name_by_id(final_data.tipo_alarme1_id) }}</p>
+    <p><strong>Alarmes do Elemento Vizinho:</strong> 
+        {% for alarme_id in final_data.tipo_alarmes2_ids %}
+            {{ database.get_tipo_alarme_name_by_id(alarme_id) }}{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </p>
+    {% if final_data.accid_lc_comum %}
+        <p><strong>ACCID/LC:</strong> {{ final_data.accid_lc_comum }}</p>
+    {% endif %}
+    {% if final_data.longa_distancia_comum is not none %}
+        <p><strong>Longa Distância:</strong> {{ 'Sim' if final_data.longa_distancia_comum == 1 else 'Não' }}</p>
+    {% endif %}
+    {% if final_data.swap_fibra_info %}
+        <p><strong>Swap de Fibra:</strong> {{ final_data.swap_fibra_info }}</p>
+    {% endif %}
+    <p><strong>Teste OTDR em curso:</strong> {{ 'Sim' if final_data.teste_otdr_em_curso == 1 else 'Não' }}</p>
+    {% if final_data.teste_otdr_em_curso == 1 and final_data.km_rompimento_otdr %}
+        <p><strong>KM do Rompimento OTDR:</strong> {{ final_data.km_rompimento_otdr }}</p>
+    {% endif %}
+    {% if final_data.estado_origem_id %}
+        <p><strong>Estado de Origem:</strong> {{ database.get_estado_enlace_name_by_id(final_data.estado_origem_id) }}</p>
+    {% endif %}
+    {% if final_data.estado_destino_id %}
+        <p><strong>Estado de Destino:</strong> {{ database.get_estado_enlace_name_by_id(final_data.estado_destino_id) }}</p>
+    {% endif %}
+    {% if final_data.info_extra %}
+        <p><strong>Informação Extra:</strong> {{ final_data.info_extra }}</p>
+    {% endif %}
+    {% if final_data.rascunho_texto %}
+        <p><strong>Rascunho:</strong> <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #f0f0f0; padding: 10px; border-radius: 5px;">{{ final_data.rascunho_texto }}</pre></p>
+    {% endif %}
+
+    <h3>Pré-visualização Final do Relatório:</h3>
+    <form method="POST" action="{{ url_for('quick_add_step2_evento') }}">
+        <label for="titulo_evento_final">Título do Evento:</label>
+        <input type="text" id="titulo_evento_final" name="titulo_evento_final" value="{{ titulo_evento_sugerido }}" readonly>
+        <p class="small-text">Este título será usado para o evento.</p>
+
+        <label for="descricao_evento_final">Descrição do Evento:</label>
+        <textarea id="descricao_evento_final" name="descricao_evento_final" rows="15" readonly>{{ final_descricao_evento }}</textarea>
+        <p class="small-text">Esta é a descrição gerada. Não editável nesta etapa.</p>
+
+        <button type="submit">Finalizar Cadastro e Gerar Evento</button>
+        <br><br>
+        <a href="{{ url_for('index') }}" style="background-color: #ff9800; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; display: inline-block;">Voltar à Etapa 1 para Editar</a>
+        <a href="{{ url_for('index') }}" style="background-color: #f44336; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; display: inline-block;">Cancelar e Reiniciar Cadastro</a>
+    </form>
+{% endblock %}

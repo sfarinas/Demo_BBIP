@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>PAINEL DE DEBUG - SISTEMA DE REDE</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { background-color: #1a1a1a; color: #00ff00; font-family: 'Courier New', monospace; padding: 20px; }
+        h1, h2 { border-bottom: 1px solid #00ff00; padding-bottom: 10px; }
+        h3, h4 { margin-top: 5px; margin-bottom: 5px; }
+        
+        /* Caixa Principal (Cinza) */
+        .box { border: 1px solid #333; background: #222; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        
+        .alert { color: #ff5555; font-weight: bold; }
+        pre { white-space: pre-wrap; }
+        
+        /* --- A CAIXA "SEPARADA" (Fundo Preto com Scroll) --- */
+        .scroll-box {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            background-color: #000;
+            padding: 10px;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        
+        /* Estilo da barra de rolagem */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #333; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #888; }
+
+        /* Botões e Inputs */
+        button { cursor: pointer; transition: opacity 0.2s; }
+        button:hover { opacity: 0.8; }
+        input, select, textarea { background: #333; color: white; border: 1px solid #555; padding: 5px; }
+
+        /* --- ESTILO DO SWITCH (MODO ENGENHARIA) --- */
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #4CAF50; }
+        input:focus + .slider { box-shadow: 0 0 1px #4CAF50; }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        /* --- ESTILO DAS TABELAS (SHERLOCK / CLUSTER) --- */
+        .sherlock-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        .sherlock-table th { text-align: left; border-bottom: 1px solid #00e5ff; color: #00e5ff; padding: 5px; }
+        .sherlock-table td { border-bottom: 1px dashed #333; padding: 5px; color: #ddd; }
+        .sherlock-row-new { animation: flashRow 1s ease; background-color: rgba(0, 229, 255, 0.1); }
+        @keyframes flashRow { from { background-color: #00e5ff; color: black; } to { background-color: transparent; color: #ddd; } }
+
+        /* --- ESTILOS NOVOS: AUDITORIA UF (ITEM 13.1) --- */
+        .audit-item {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #333; padding: 5px 0;
+        }
+        .audit-item:hover { background-color: #111; }
+        .audit-info { font-size: 12px; color: #ccc; }
+        .audit-btn {
+            background-color: #00ff00; color: #000; border: none; padding: 2px 8px;
+            cursor: pointer; font-weight: bold; font-size: 11px; margin-left: 5px;
+        }
+        .audit-btn:hover { background-color: #fff; }
+
+        /* Estilo da Barra de Manipulação do Vis.js (Add Edge) */
+        div.vis-network div.vis-manipulation {
+            background: #2a2a2a;
+            border-bottom: 1px solid #9c27b0;
+            color: white;
+        }
+        div.vis-network div.vis-edit-mode-btn {
+            background: #2a2a2a;
+            color: white;
+            border: 1px solid #9c27b0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 PAINEL DE DEBUG (DEBG.PY)</h1>
+    <p>Diagnóstico em tempo real do servidor e banco de dados.</p>
+
+    <div class="box">
+        <h2>1. Relógio do Sistema (Timezone Check)</h2>
+        <ul>{% for key, value in time_info.items() %}<li><strong>{{ key }}:</strong> {{ value }}</li>{% endfor %}</ul>
+    </div>
+
+    <div class="box">
+        <h2>2. Integridade do Banco (Links Quebrados)</h2>
+        <ul>{% for msg in integrity_check %}<li class="{{ 'alert' if 'ALERTA' in msg else '' }}">{{ msg }}</li>{% endfor %}</ul>
+    </div>
+
+    <div class="box">
+        <h2>3. Caça-Fantasmas (Elementos com Aspas Proibidas)</h2>
+        <div class="scroll-box">
+            {% if suspeitos %}
+                {% for item in suspeitos %}
+                    <div style="border-bottom: 1px dashed #333; padding: 5px 0;">
+                        <span style="color: #888;">[ID: {{ item['DADOS BRUTOS']['id'] }}]</span> 
+                        NOME: <span style="color: yellow;">{{ item['DADOS BRUTOS']['nome_elemento'] }}</span> <br>
+                        STATUS: <span style="{{ 'color: #ff5555;' if 'PERIGO' in item['ANÁLISE'] else 'color: #00ff00;' }}">{{ item['ANÁLISE'] }}</span>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #00e676; margin: 0;">✅ Nenhum elemento com aspas encontrado.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="box">
+        <h2>4. Diagnóstico de Cores</h2>
+        <div class="scroll-box" style="max-height: 400px;">
+            {% for line in color_diagnosis %}
+                <div style="border-bottom: 1px dashed #333; padding: 5px 0; color: {{ '#ff5555' if 'NÃO VAI PINTAR' in line else '#ffff55' if 'LARANJA' in line else '#ff55ff' if 'VERMELHO' in line else '#00ff00' }};">
+                    {{ line }}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="box">
+        <h2>5. Inspeção Links de Capacidade</h2>
+        <div style="background: #333; padding: 10px; margin-bottom: 15px; border: 1px dashed #555; border-radius: 5px;">
+            <h4 style="margin-top: 0; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px;">5.1 Gestão de Backup (CSV)</h4>
+            <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                <a href="/debug/export_links_csv" style="text-decoration: none;">
+                    <button style="background-color: #2196F3; color: white; border: none; padding: 8px 15px; font-weight: bold; border-radius: 3px;">
+                        📥 1. BAIXAR BACKUP (CSV)
+                    </button>
+                </a>
+                <span style="font-size: 12px; color: #ccc;">Clique aqui antes de resetar a tabela.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <input type="file" id="csvLinksUpload" accept=".csv" style="color: #fff;">
+                <button onclick="uploadLinksCsv()" style="background-color: #4CAF50; color: white; border: none; padding: 8px 15px; font-weight: bold; border-radius: 3px;">
+                    📤 2. RESTAURAR (CSV)
+                </button>
+                <span style="font-size: 12px; color: #ccc;">Restaura os links usando os nomes atuais.</span>
+            </div>
+        </div>
+        <h3>Log de Inspeção:</h3>
+        <pre>{{ link_inspection | join('\n') }}</pre>
+    </div>
+
+    <div class="box" style="border-color: red;">
+        <h2 style="color: red;">6. Zona de Perigo (Manutenção)</h2>
+        <div style="border: 1px solid #555; padding: 10px; margin-top: 10px;">
+            <strong>Resetar Tabela 'links_capacidade'</strong><br>
+            <p style="color: #ffaaaa; font-size: 12px;">CUIDADO: Isso apaga todos os links. Faça o backup no Item 5.1 primeiro!</p>
+            <button onclick="resetLinksTable()" style="background-color: #d32f2f; color: white; border: none; padding: 10px;">
+                ☢️ APAGAR E RECRIAR TABELA DE LINKS
+            </button>
+            <hr style="border-color: #555; margin: 15px 0;">
+            <strong>Testar Cores (Expirar Alarmes)</strong><br>
+            <button onclick="expireAlarms()" style="background-color: #2196F3; color: white; border: none; padding: 10px;">
+                ⏰ EXPIRAR TODOS OS ALARMES AGORA
+            </button>
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #9c27b0;">
+        <h2 style="color: #9c27b0;">7. Auditoria Longa Distância</h2>
+        <div class="scroll-box">
+            {% if ld_audit %}
+                {% for line in ld_audit %}
+                    <div style="margin-bottom: 2px; color: {{ '#00e676' if 'SUCESSO' in line else '#ff5555' if 'ERRO' in line or 'ALERTA' in line else '#fff' }};">
+                        {{ line }}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>Nenhum dado de auditoria disponível.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #ff9800;">
+        <h2 style="color: #ff9800;">8. Gestão de Sobras (Órfãos LD)</h2>
+        <div class="scroll-box">
+            {% if stock_audit %}
+                {% for line in stock_audit %}
+                    {% if 'ACTION_MOVE' in line %}
+                        {% set parts = line.split('|') %}
+                        <div style="margin-bottom: 5px; border-bottom: 1px dashed #444; padding: 3px;">
+                            <span style="color: #ffcc00;">{{ parts[2] }}</span>
+                            <button onclick="moveToStock({{ parts[1] }}, '{{ parts[2] }}')" 
+                                    style="margin-left: 10px; background: #e65100; color: white; border: none; padding: 2px 8px; border-radius: 3px;">
+                                MOVER PARA ESTOQUE
+                            </button>
+                        </div>
+                    {% else %}
+                        <div style="margin-bottom: 2px; color: #fff;">{{ line }}</div>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <p>Nenhum dado de estoque disponível.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #00bcd4;">
+        <h2 style="color: #00bcd4;">9. Auditoria de Hierarquia (Anéis LD)</h2>
+        <div class="scroll-box">
+            {% if hierarchy_audit %}
+                {% for line in hierarchy_audit %}
+                    {% if 'ACTION_FIX_HIERARCHY' in line %}
+                        {% set parts = line.split('|') %}
+                        <div style="margin-bottom: 5px; border-bottom: 1px dashed #444; padding: 5px;">
+                            <span style="color: #ffcc00;">{{ parts[2] }}</span> 
+                            <span style="color: #888; font-size: 0.9em;">(Anel: {{ parts[3] }})</span>
+                            <br>
+                            <button onclick="fixHierarchy({{ parts[1] }}, '{{ parts[2] }}')" 
+                                    style="margin-top: 5px; background: #00bcd4; color: black; border: none; padding: 4px 10px; border-radius: 3px; font-weight: bold;">
+                                🔧 CORRIGIR PARA LONGA DISTÂNCIA
+                            </button>
+                        </div>
+                    {% else %}
+                        <div style="margin-bottom: 2px; color: {{ '#ff5555' if 'ALERTA' in line else '#00e676' if 'Tudo certo' in line else '#fff' }};">
+                            {{ line }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <p>Nenhum dado de auditoria disponível.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #e91e63;">
+        <h2 style="color: #e91e63;">10. Construtor de Databook (Builder)</h2>
+        
+        <div style="background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #555; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <strong style="font-size: 18px;">🔧 Modo Engenharia (Edição da Rede)</strong>
+                <p style="color: #aaa; margin: 5px 0 0 0; font-size: 12px;">
+                    Ative para: <b>Arrumar Layout, Criar Links (Add Edge) e Editar Dados.</b><br>
+                    <span style="color: #ff5555;">Mantenha DESLIGADO durante a operação normal.</span>
+                </p>
+            </div>
+            
+            <div style="text-align: right;">
+                <label class="switch">
+                    <input type="checkbox" id="engineeringSwitch" onchange="toggleEngineeringMode()">
+                    <span class="slider"></span>
+                </label>
+                <div id="engStatusText" style="font-weight: bold; margin-top: 5px; color: #ccc;">BLOQUEADO</div>
+            </div>
+        </div>
+
+        <p>Selecione uma seção para editar visualmente, definir ícones e quilometragem.</p>
+
+        <div style="margin-bottom: 15px;">
+            <label>Selecione a Seção (Anel):</label>
+            <select id="db_anel_selector" style="padding: 5px; width: 300px;" onchange="loadDatabookSection()">
+                <option value="">-- Escolha um Anel --</option>
+            </select>
+            <button onclick="loadAneisList()" style="cursor: pointer; padding: 5px;">🔄 Recarregar Lista</button>
+        </div>
+
+        <div id="databook_workspace" style="display: none;">
+            
+            <div style="background: #333; padding: 10px; margin-bottom: 10px; border: 1px dashed #666;">
+                <h3 style="margin-top:0; color: #ddd;">Cabeçalho da Seção</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <div><small>Coerência:</small><br><input type="text" id="meta_coerencia" placeholder="Ex: 100G"></div>
+                    <div><small>Matriz OTN:</small><br><select id="meta_otn"><option value="0">Não</option><option value="1">Sim</option></select></div>
+                    <div><small>Swap Info:</small><br><input type="text" id="meta_swap" placeholder="Info Complementar"></div>
+                    <div><small>Tecnologia/Comp:</small><br><input type="text" id="meta_tec" placeholder="Ex: DWDM Huawei"></div>
+                    <div style="align-self: flex-end;">
+                        <button onclick="saveMetadata()" style="background: #4CAF50; color: white; border: none; padding: 5px 10px;">💾 SALVAR CABEÇALHO</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                
+                <div id="builder_network" style="width: 70%; height: 600px; background: #fff; border: 1px solid #ccc;"></div>
+
+                <div style="width: 30%; background: #222; padding: 10px; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #444;">
+                    
+                    <div id="panel_add" style="display: block;">
+                        <h4 style="color: #e91e63; margin-top:0; border-bottom: 1px solid #e91e63;">+ Adicionar Novo</h4>
+                        
+                        <input type="text" id="new_node_name" placeholder="Nome do Elemento" style="width: 95%; margin-bottom: 5px;" oninput="detectVendorPreview()">
+                        
+                        <div style="margin-bottom: 5px;">
+                            <select id="new_node_icon" style="width: 100%;">
+                                <option value="roadm">■ Quadrado (ROADM)</option>
+                                <option value="switch">▲ Triângulo (Switch/OLAS)</option>
+                                <option value="foadm" id="opt_foadm" disabled>▬ Retângulo (FOADM)</option>
+                                <option value="passivo">● Bolinha (Passivo)</option>
+                            </select>
+                        </div>
+                        
+                        <label style="color: #aaa; font-size: 0.9em; display: flex; align-items: center; gap: 5px;">
+                            <input type="checkbox" id="new_node_passive"> 
+                            É Passivo/Genérico?
+                            <span title="Marque para passagens de fibra ou elementos sem gerência (Ficará Cinza)." style="cursor: help;">ℹ️</span>
+                        </label>
+                        <br><br>
+                        <button onclick="addDbNode()" style="width: 100%; background: #e91e63; color: white; border: none; padding: 8px; font-weight: bold;">ADICIONAR</button>
+                    </div>
+
+                    <div id="panel_edit" style="display: none; background: #222; border: 1px solid #2196F3; padding: 10px;">
+                        <h4 style="color: #2196F3; margin-top:0; border-bottom: 1px solid #2196F3; font-size: 14px;">
+                            ✏️ Editar Databook
+                        </h4>
+                        
+                        <div style="background: #333; padding: 5px; margin-bottom: 10px; border-radius: 4px;">
+                            <small style="color: #888;">Elemento ID (NE Name):</small><br>
+                            <strong id="edit_name_display" style="color: #fff; font-size: 12px; word-break: break-all;">--</strong>
+                            <input type="hidden" id="edit_node_id"> </div>
+
+                        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                            <div style="flex: 1;">
+                                <small>Ícone:</small>
+                                <select id="edit_icon" style="width: 100%;">
+                                    <option value="roadm">■ Quadrado</option>
+                                    <option value="switch">▲ Triângulo</option>
+                                    <option value="foadm">▬ Retângulo</option>
+                                    <option value="passivo">● Passivo</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: flex-end;">
+                                <label style="color: #ccc; font-size: 11px;">
+                                    <input type="checkbox" id="edit_passive"> É Passivo?
+                                </label>
+                            </div>
+                        </div>
+
+                        <hr style="border-color: #444; margin: 5px 0;">
+
+                        <div style="display: flex; gap: 5px;">
+                            <div style="flex: 1;">
+                                <small>Site ID (END_ID):</small>
+                                <input type="text" id="inp_db_site_id" placeholder="Ex: BASDR_0053" style="width: 95%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <small>Sigla CNL:</small>
+                                <input type="text" id="inp_db_sigla" placeholder="Ex: SDR" style="width: 95%;">
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 5px; margin-top: 5px;">
+                            <div style="flex: 2;">
+                                <small>Localidade (Cidade):</small>
+                                <input type="text" id="inp_db_cidade" placeholder="Ex: Salvador" style="width: 95%; font-weight: bold; color: #81d4fa;">
+                            </div>
+                            <div style="flex: 1;">
+                                <small>UF:</small>
+                                <input type="text" id="inp_db_uf" placeholder="BA" style="width: 95%;">
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 5px;">
+                            <small>Endereço / Logradouro:</small>
+                            <textarea id="inp_db_endereco" rows="2" style="width: 98%; background: #333; color: white; border: 1px solid #555; font-family: sans-serif;"></textarea>
+                        </div>
+
+                        <div style="margin-top: 5px;">
+                            <small>Detentor (Proprietário):</small>
+                            <input type="text" id="inp_db_detentor" placeholder="Ex: EMBRATEL" style="width: 98%;">
+                        </div>
+
+                        <div style="display: flex; gap: 5px; margin-top: 15px;">
+                            <button onclick="saveFullNodeDetails()" style="flex: 3; background: #4CAF50; color: white; border: none; padding: 8px; font-weight: bold; cursor: pointer;">💾 SALVAR DADOS</button>
+                            <button onclick="deleteSelected()" style="flex: 1; background: #d32f2f; color: white; border: none; padding: 8px; cursor: pointer;" title="Remover nó do desenho">🗑️</button>
+                        </div>
+                        
+                        <button onclick="closeEditPanel()" style="width: 100%; background: #444; color: #ccc; border: none; margin-top: 10px; padding: 5px; cursor: pointer;">Cancelar Seleção</button>
+                    </div>
+
+                    <div id="edit_link_area" style="display: none; background: #222; border: 1px solid #ff9800; padding: 10px;">
+                        <h4 style="color: #ff9800; margin-top:0; border-bottom: 1px solid #ff9800;">🔗 Editar Link</h4>
+                        <small>Conexão:</small><br>
+                        <span id="edit_link_label" style="color: #fff; font-size: 0.8em;"></span><br><br>
+                        
+                        <small>Distância (KM):</small>
+                        <input type="number" id="edit_km" step="0.1" style="width: 95%;">
+
+                        <div style="display: flex; gap: 5px; margin-top: 10px;">
+                            <button onclick="addDbLink(true)" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 5px;">💾 ATUALIZAR KM</button>
+                            <button onclick="deleteSelected()" style="flex: 1; background: #ff4444; color: white; border: none; padding: 5px;">🗑️ REMOVER</button>
+                        </div>
+                        <button onclick="closeEditPanel()" style="width: 100%; background: #444; color: #ccc; border: none; margin-top: 10px; padding: 5px;">Cancelar</button>
+                    </div>
+
+                    <div style="border-top: 1px solid #444; padding-top: 10px; display: none;"> <h4 style="color: #fff; margin-top:0;">Criar Link Rápido</h4>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="number" id="link_src" placeholder="ID A" style="width: 40%;">
+                            <input type="number" id="link_dst" placeholder="ID B" style="width: 40%;">
+                        </div>
+                        <input type="number" id="link_km" placeholder="KM" step="0.1" style="width: 90%; margin-top: 5px;">
+                        <button onclick="addDbLink()" style="width: 100%; background: #2196F3; color: white; border: none; padding: 5px; margin-top: 5px;">CONECTAR</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #fff;">
+        <h3>10.1 Diagnóstico de Carga (WDM_LD)</h3>
+        <pre>{% for line in loader_diag %}{{ line }}
+{% endfor %}</pre>
+    </div>
+
+    <div class="box" style="border-color: #9c27b0;">
+        <h2 style="color: #9c27b0;">11. Sanitização de Nomes (Remover Acentos)</h2>
+        <p>Padroniza nomes removendo 'Ç', 'Ã', etc.</p>
+        <div class="scroll-box">
+            {% if accent_audit %}
+                {% for line in accent_audit %}
+                    {% if 'ACTION_FIX_ACCENT' in line %}
+                        {% set parts = line.split('|') %}
+                        <div style="margin-bottom: 5px; border-bottom: 1px dashed #444; padding: 5px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <span style="color: #ff5555; text-decoration: line-through;">{{ parts[2] }}</span> 
+                                ➡️ 
+                                <span style="color: #00e676; font-weight:bold;">{{ parts[3] }}</span>
+                            </div>
+                            <button onclick="fixAccent({{ parts[1] }}, '{{ parts[3] }}')" 
+                                    style="background: #9c27b0; color: white; border: none; padding: 4px 10px; border-radius: 3px;">
+                                LIMPAR
+                            </button>
+                        </div>
+                    {% else %}
+                        <div style="margin-bottom: 2px;">{{ line }}</div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #00ff41;">
+        <h2 style="color: #00ff41;">12. Ferramentas do Matrix (Lógica)</h2>
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <div>
+                <strong>Sincronizar Roteadores com Sites (HUD)</strong><br>
+                <span style="color: #aaa; font-size: 12px;">Vincula equipamentos lógicos aos sites físicos pelo nome.</span>
+            </div>
+            <button onclick="runRouterFix()" style="background-color: #00ff41; color: black; border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; box-shadow: 0 0 10px #00ff41;">
+                🕶️ RODAR CORREÇÃO DE ROTEADORES
+            </button>
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #555; opacity: 0.6;">
+        <h3 style="color: #aaa; margin-top: 0;">12.1 [LEGADO] Visualizador de Roteadores</h3>
+        <p>Lista simples para conferência. Use o Item 12.2 para correção automática.</p>
+        
+        <div class="scroll-box" style="max-height: 200px; background: #0a0a0a;">
+            <table class="sherlock-table">
+                <thead>
+                    <tr style="background: #111; color: #fff; text-align: left;">
+                        <th style="padding: 5px; border-bottom: 1px solid #333;">ID</th>
+                        <th style="padding: 5px; border-bottom: 1px solid #333;">Hostname</th>
+                        <th style="padding: 5px; border-bottom: 1px solid #333;">Site ID Atual</th>
+                        <th style="padding: 5px; border-bottom: 1px solid #333;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if routers_list %}
+                        {% for r in routers_list %}
+                        <tr style="border-bottom: 1px dashed #333;">
+                            <td style="padding: 5px; color: #888;">{{ r.id }}</td>
+                            <td style="padding: 5px; color: #fff;">{{ r.hostname }}</td>
+                            <td style="padding: 5px;">
+                                {% if r.site_id_atual %}
+                                    <span style="color: #00ff41;">{{ r.site_id_atual }}</span>
+                                {% else %}
+                                    <span style="color: #555;">-- VAZIO --</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 5px;">
+                                {% if r.site_id_atual %}
+                                    ✅ OK
+                                {% else %}
+                                    <span style="color: #ff5555;">🚫 Órfão</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" style="padding: 20px; text-align: center; color: #ff5555;">
+                                Nenhuma informação disponível.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #00e5ff; background: #0a151a;">
+        <h3 style="color: #00e5ff; margin-top: 0; text-shadow: 0 0 10px #00e5ff;">12.2 Sherlock Holmes 2.0 🕵️‍♂️ (Inteligência Lógica)</h3>
+        <p>Analisa a topologia física e o nome dos equipamentos de transmissão para encontrar onde os roteadores estão instalados.</p>
+        
+        <div style="display: flex; align-items: center; gap: 20px; margin-top: 10px; margin-bottom: 15px;">
+            <button onclick="runSherlock()" style="background-color: #00e5ff; color: black; border: none; padding: 15px 30px; font-weight: bold; border-radius: 4px; box-shadow: 0 0 20px rgba(0, 229, 255, 0.4); font-size: 14px;">
+                🕵️‍♂️ EXECUTAR INVESTIGAÇÃO
+            </button>
+            <div id="sherlock-status" style="color: #aaa; font-style: italic;">Pronto para iniciar.</div>
+        </div>
+
+        <div id="sherlock-results-area" style="display: none; margin-top: 15px; border-top: 1px dashed #00e5ff; padding-top: 10px;">
+            <h4 style="color: #fff;">📄 Relatório da Investigação:</h4>
+            <div class="scroll-box" style="max-height: 400px; background: #000; border: 1px solid #00e5ff;">
+                <table class="sherlock-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 100%;">Detalhes da Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sherlock-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #ffd700; background: #1a1a10;">
+        <h3 style="color: #ffd700; margin-top: 0;">13. Gestão de Agrupamento (Clusters) 🌎</h3>
+        <p>Gera os apelidos geográficos (Região e UF) baseando-se primeiramente no Cadastro Oficial (Coluna UF/Cidade) e depois no Nome.</p>
+        
+        <div style="display: flex; align-items: center; gap: 20px; margin-top: 10px;">
+            <button onclick="runClusterManager('preview')" style="background-color: #555; color: white; border: 1px solid #ffd700; padding: 10px 20px; font-weight: bold; border-radius: 4px; cursor: pointer;">
+                🔍 SIMULAR
+            </button>
+            <button onclick="runClusterManager('save')" style="background-color: #ffd700; color: black; border: none; padding: 10px 20px; font-weight: bold; border-radius: 4px; cursor: pointer;">
+                💾 GRAVAR NO BANCO (PERFORMANCE)
+            </button>
+            <div id="cluster-status" style="color: #aaa; font-style: italic;">Aguardando...</div>
+        </div>
+
+        <div id="cluster-results-area" style="display: none; margin-top: 15px;">
+            <div class="scroll-box" style="max-height: 400px; background: #000; border: 1px solid #ffd700;">
+                <table class="sherlock-table">
+                    <thead>
+                        <tr style="color: #ffd700; border-bottom: 1px solid #ffd700;">
+                            <th style="padding: 5px; text-align: left;">Nome Original</th>
+                            <th style="padding: 5px; text-align: left;">Cluster Região (Nível 2)</th>
+                            <th style="padding: 5px; text-align: left;">Cluster UF (Nível 1)</th>
+                            <th style="padding: 5px; text-align: left;">Fonte UF</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cluster-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="box" style="border-color: #ff9800;">
+        <h3 style="color: #ff9800;">13.1. AUDITORIA E CORREÇÃO DE UF</h3>
+        <p>Lista elementos onde o 'cluster_uf' atual é desconhecido (N/A) ou parece incorreto baseado no nome do elemento.<br>
+           <small style="color: #aaa;">OBS: Insira a UF manualmente (Máx 2 letras, ex: XX, US, SP) caso a sugestão não esteja disponível.</small>
+        </p>
+        <button onclick="runUFAudit()" style="color: #ff9800; border-color: #ff9800; background: transparent; border: 1px solid #ff9800; padding: 5px 10px; cursor: pointer;">⚠️ Auditar Divergências</button>
+        <div id="audit-uf-output" class="scroll-box" style="max-height: 300px; overflow-y: auto;">Clique para verificar inconsistências...</div>
+    </div>
+
+    <br>
+    <a href="{{ url_for('index') }}" style="color: #fff; font-size: 1.2em;">VOLTAR AO SISTEMA</a>
+
+    <script>
+        // Scripts Gerais
+        
+        // --- FUNÇÃO SHERLOCK 2.0 (COM TABELA) ---
+        async function runSherlock() {
+            if(!confirm("Iniciar a investigação completa (Sherlock 2.0)?\nIsso pode levar alguns segundos.")) return;
+            
+            const btn = event.target;
+            const statusDiv = document.getElementById('sherlock-status');
+            const resultArea = document.getElementById('sherlock-results-area');
+            const tableBody = document.getElementById('sherlock-table-body');
+            const originalText = btn.innerText;
+            
+            btn.innerText = "🕵️‍♂️ INVESTIGANDO...";
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            statusDiv.innerHTML = "<span style='color:#00e5ff; animation: blink 1s infinite;'>Analisando circuitos e topologia...</span>";
+            
+            // Limpa tabela anterior
+            tableBody.innerHTML = "";
+            resultArea.style.display = "none";
+
+            try {
+                const response = await fetch('/api/debug/sherlock_locate_routers', { method: 'POST' });
+                const data = await response.json();
+                
+                if(data.success) {
+                    statusDiv.innerHTML = `<span style="color:#00ff41; font-weight:bold;">${data.message}</span>`;
+                    
+                    // Popula a tabela se houver detalhes
+                    if (data.details && data.details.length > 0) {
+                        resultArea.style.display = "block";
+                        data.details.forEach(msg => {
+                            const tr = document.createElement('tr');
+                            tr.className = 'sherlock-row-new';
+                            tr.innerHTML = `<td>${msg}</td>`;
+                            tableBody.appendChild(tr);
+                        });
+                    } else {
+                        // Se não houve mudanças
+                        resultArea.style.display = "block";
+                        tableBody.innerHTML = "<tr><td style='color:#888; text-align:center;'>Nenhuma alteração necessária. A rede está sincronizada.</td></tr>";
+                    }
+                    
+                    alert("✅ SUCCESSO!\nInvestigação concluída. O Item 12.1 será atualizado após o refresh.");
+                    // Recarrega a página para atualizar a tabela do 12.1
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert("❌ Erro: " + data.message);
+                    statusDiv.innerText = "Falha na investigação.";
+                }
+            } catch (e) {
+                alert("Erro de conexão: " + e);
+                statusDiv.innerText = "Erro de conexão.";
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+                btn.style.opacity = "1";
+            }
+        }
+
+        // --- FUNÇÃO CLUSTER MANAGER (ITEM 13) ---
+        async function runClusterManager(action) {
+            const btn = event.target;
+            const originalText = btn.innerText; // Guarda o texto original do botão
+            const statusDiv = document.getElementById('cluster-status');
+            const area = document.getElementById('cluster-results-area');
+            const tbody = document.getElementById('cluster-table-body');
+            
+            btn.disabled = true; 
+            btn.innerText = "⏳ PROCESSANDO...";
+            tbody.innerHTML = ""; 
+            area.style.display = "block";
+            statusDiv.innerText = "Analisando dados...";
+
+            try {
+                const resp = await fetch('/api/debug/manage_clusters', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: action })
+                });
+                const data = await resp.json();
+                
+                if(data.success) {
+                    statusDiv.innerHTML = `<span style="color:#ffd700">${action === 'save' ? 'Gravado com Sucesso!' : 'Simulação Pronta'}</span>`;
+                    
+                    if (action === 'save') alert(data.message);
+                    
+                    if(data.report && data.report.length > 0) {
+                        data.report.forEach(row => {
+                            const tr = document.createElement('tr');
+                            
+                            // Lógica visual: Verde se UF veio do Cadastro (Confiável), Cinza se veio do Nome
+                            let colorSource = '#888'; 
+                            let textSource = row.origem_uf || '-';
+                            
+                            if(textSource.includes('Cadastro') || textSource.includes('Cidade')) {
+                                colorSource = '#00ff41'; // Verde Matrix
+                            }
+                            
+                            tr.innerHTML = `
+                                <td style="padding:5px; color:#fff;">${row.original}</td>
+                                <td style="padding:5px; color:#00e5ff; font-weight:bold;">${row.regiao}</td> <td style="padding:5px; color:#ffd700; font-weight:bold;">${row.uf}</td>     <td style="padding:5px; color:${colorSource}; font-size:10px;">${textSource}</td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    } else {
+                        tbody.innerHTML = "<tr><td colspan='4' style='text-align:center; color:#888;'>Nenhum dado retornado.</td></tr>";
+                    }
+                } else {
+                    alert("Erro no backend: " + data.message);
+                    statusDiv.innerText = "Falha.";
+                }
+            } catch(e) {
+                alert("Erro de conexão: " + e);
+                statusDiv.innerText = "Erro de rede.";
+            } finally {
+                btn.disabled = false; 
+                btn.innerText = originalText; // Restaura o texto original do botão (Simular ou Gravar)
+            }
+        }
+
+        // --- FUNÇÃO 13.1: AUDITORIA E CORREÇÃO DE UF (COM INPUT MANUAL) ---
+        async function runUFAudit() {
+            const div = document.getElementById('audit-uf-output');
+            div.innerHTML = "<span style='color:yellow;'>🔍 Buscando inconsistências...</span>";
+            
+            try {
+                const resp = await fetch('/api/debug/audit_uf_mismatch', { method: 'POST' });
+                const data = await resp.json();
+                
+                if (data.success) {
+                    if (data.mismatches.length === 0) {
+                        div.innerHTML = "<span style='color:#00ff00;'>✅ Tudo certo! Todos os elementos possuem UF definida.</span>";
+                    } else {
+                        let html = `<table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <tr style="border-bottom:1px solid #555; text-align:left; color:#ff9800;">
+                                <th style="padding:5px;">Elemento / ID</th>
+                                <th style="padding:5px;">Sugestão Auto</th>
+                                <th style="padding:5px;">Correção Manual</th>
+                                <th style="padding:5px;">Ação</th>
+                            </tr>`;
+                        
+                        data.mismatches.forEach(item => {
+                            // Se tiver sugestão, usa como valor inicial. Senão, vazio.
+                            const valorInicial = item.suggested_uf || '';
+                            
+                            html += `
+                            <tr id="audit-row-${item.id}" style="border-bottom:1px dashed #333;">
+                                <td style="padding:8px;">
+                                    <strong style="color:white;">${item.nome}</strong><br>
+                                    <span style="color:#888; font-size:10px;">ID: ${item.id}</span>
+                                </td>
+                                <td style="padding:8px;">
+                                    ${item.suggested_uf ? 
+                                        `<span style="color:#00ff41;">${item.suggested_uf}</span> <br><small style="color:#aaa;">(${item.reason})</small>` : 
+                                        '<span style="color:#ff4444;">Sem sugestão</span>'}
+                                </td>
+                                <td style="padding:8px;">
+                                    <input type="text" id="input-uf-${item.id}" value="${valorInicial}" 
+                                           maxlength="2" 
+                                           placeholder="XX"
+                                           onkeyup="this.value = this.value.toUpperCase();"
+                                           style="width: 40px; text-align:center; font-weight:bold; padding: 5px; background:#222; color:white; border:1px solid #555; text-transform:uppercase;">
+                                </td>
+                                <td style="padding:8px;">
+                                    <button class="audit-btn" onclick="saveManualUF(${item.id})">
+                                        💾 Salvar
+                                    </button>
+                                </td>
+                            </tr>`;
+                        });
+                        
+                        html += '</table>';
+                        div.innerHTML = html;
+                    }
+                } else {
+                    div.innerHTML = "Erro na análise: " + data.message;
+                }
+            } catch(e) { div.innerText = "Erro de conexão: " + e; }
+        }
+
+        async function saveManualUF(id) {
+            const input = document.getElementById(`input-uf-${id}`);
+            const ufValue = input.value.trim().toUpperCase();
+            
+            if (!ufValue) {
+                alert("Por favor, digite uma UF (Ex: SP, RJ, US, XX).");
+                input.focus();
+                return;
+            }
+
+            // Feedback visual imediato
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "⏳";
+            btn.disabled = true;
+            
+            try {
+                const resp = await fetch('/api/debug/fix_element_uf', { 
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: id, uf: ufValue })
+                });
+                const data = await resp.json();
+                
+                if(data.success) {
+                    const row = document.getElementById(`audit-row-${id}`);
+                    row.style.backgroundColor = "rgba(0, 255, 65, 0.1)";
+                    row.innerHTML = `<td colspan="4" style="padding:10px; color:#00ff41; text-align:center; font-weight:bold;">
+                        ✅ Atualizado para [${data.uf_saved}] com sucesso!
+                    </td>`;
+                    setTimeout(() => row.remove(), 1500);
+                } else {
+                    alert("Erro ao corrigir: " + data.message);
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            } catch(e) { 
+                alert("Erro de conexão"); 
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- FUNÇÃO PARA O BOTÃO MATRIX (ITEM 12) ---
+        async function runRouterFix() {
+            if(!confirm("Deseja rodar a correção de vínculos de roteadores?\nIsso pode levar alguns segundos.")) return;
+            
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ RODANDO...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/debug/run_router_fix', { method: 'POST' });
+                const data = await response.json();
+                
+                if(data.success) {
+                    alert("✅ " + data.message);
+                } else {
+                    alert("❌ Erro: " + data.message);
+                }
+            } catch (e) {
+                alert("Erro de conexão: " + e);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- FUNÇÕES DE CONTROLE MODO ENGENHARIA ---
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/admin/get_engineering_mode')
+                .then(r => r.json())
+                .then(data => {
+                    const switchEl = document.getElementById('engineeringSwitch');
+                    if(switchEl) {
+                        switchEl.checked = data.enabled;
+                        updateEngStatusUI(data.enabled);
+                    }
+                });
+        });
+
+        function toggleEngineeringMode() {
+            const isEnabled = document.getElementById('engineeringSwitch').checked;
+            
+            fetch('/api/admin/toggle_engineering_mode', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ enabled: isEnabled })
+            }).then(r => r.json())
+              .then(data => {
+                  updateEngStatusUI(data.enabled);
+                  if(data.enabled) alert("⚠️ MODO ENGENHARIA ATIVADO!\nAgora você pode criar links e salvar posições.");
+              });
+        }
+
+        function updateEngStatusUI(isEnabled) {
+            const txt = document.getElementById('engStatusText');
+            if(isEnabled) {
+                txt.innerText = "LIBERADO 🔓";
+                txt.style.color = "#4CAF50";
+            } else {
+                txt.innerText = "BLOQUEADO 🔒";
+                txt.style.color = "#ff5555";
+            }
+        }
+        
+        // --- FUNÇÕES AUXILIARES (RESET, UPLOAD, ETC) ---
+        async function resetLinksTable() {
+            if (!confirm("TEM CERTEZA ABSOLUTA?")) return;
+            try {
+                const response = await fetch('/api/debug/reset_links', { method: 'POST' });
+                const data = await response.json();
+                alert(data.message); location.reload();
+            } catch (error) { alert("Erro conexão."); }
+        }
+        async function expireAlarms() {
+            try {
+                const response = await fetch('/api/debug/expire_alarms', { method: 'POST' });
+                const data = await response.json();
+                alert(data.message); location.reload();
+            } catch (error) { alert("Erro conexão."); }
+        }
+        async function moveToStock(id, nome) {
+            if (!confirm(`Mover '${nome}' para Sobras?`)) return;
+            try {
+                const response = await fetch('/api/debug/move_stock', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: id, nome: nome })
+                });
+                const data = await response.json();
+                alert(data.message); if(data.success) location.reload();
+            } catch (e) { alert("Erro conexão."); }
+        }
+        async function fixHierarchy(id, nome) {
+            try {
+                const response = await fetch('/api/debug/fix_hierarchy', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: id, nome: nome })
+                });
+                const data = await response.json();
+                alert(data.message); if(data.success) location.reload();
+            } catch (e) { alert("Erro conexão."); }
+        }
+        async function fixAccent(id, novoNome) {
+            try {
+                const response = await fetch('/api/debug/fix_accent', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: id, novo_nome: novoNome })
+                });
+                const data = await response.json();
+                alert(data.message); if(data.success) location.reload();
+            } catch (e) { alert("Erro conexão."); }
+        }
+        async function uploadLinksCsv() {
+            const fileInput = document.getElementById('csvLinksUpload');
+            if (!fileInput.files[0]) {
+                alert("Selecione um arquivo CSV primeiro!");
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            if(!confirm("Tem certeza? Isso irá adicionar os links encontrados no CSV ao banco de dados.")) return;
+            try {
+                const resp = await fetch('/debug/import_links_csv', { method: 'POST', body: formData });
+                const data = await resp.json();
+                alert(data.message);
+                if(data.success) location.reload();
+            } catch(e) { alert("Erro no upload: " + e); }
+        }
+
+        // --- SCRIPTS DO BUILDER (ITEM 10) ---
+        let networkBuilder = null;
+        let currentSelection = null; 
+        let nodesDataSet = null; 
+        let edgesDataSet = null;
+
+        async function loadAneisList() {
+            try {
+                const response = await fetch('/api/search_anel?q=WDM_LD'); 
+                const data = await response.json();
+                const sel = document.getElementById('db_anel_selector');
+                sel.innerHTML = '<option value="">-- Escolha um Anel --</option>';
+                data.forEach(anel => {
+                    const opt = document.createElement('option');
+                    opt.value = anel.id; opt.innerText = anel.nome_anel;
+                    sel.appendChild(opt);
+                });
+            } catch(e) { console.log(e); }
+        }
+
+        async function loadDatabookSection() {
+            const anelId = document.getElementById('db_anel_selector').value;
+            if(!anelId) return;
+
+            document.getElementById('databook_workspace').style.display = 'block';
+            closeEditPanel();
+
+            const response = await fetch(`/api/debug/databook/get_section/${anelId}`);
+            const data = await response.json();
+
+            document.getElementById('meta_coerencia').value = data.metadata.coerencia || '';
+            document.getElementById('meta_otn').value = data.metadata.matriz_otn;
+            document.getElementById('meta_swap').value = data.metadata.swap_info || '';
+            document.getElementById('meta_tec').value = data.metadata.complemento_tecnologia || '';
+
+            const processedNodes = data.nodes.map(node => {
+                let displayLabel = node.label;
+                if (node.cidade && node.cidade.trim() !== "") displayLabel = node.cidade;
+                
+                return {
+                    ...node,
+                    label: displayLabel,
+                    original_name: node.label,
+                    font: { size: 14, color: '#000', face: 'arial', strokeWidth: 2, strokeColor: '#ffffff' }
+                };
+            });
+
+            const container = document.getElementById('builder_network');
+            nodesDataSet = new vis.DataSet(processedNodes);
+            edgesDataSet = new vis.DataSet(data.edges);
+
+            const visData = { nodes: nodesDataSet, edges: edgesDataSet };
+            const options = {
+                nodes: { borderWidth: 2 },
+                edges: { width: 2, color: { color: '#848484' }, smooth: false },
+                physics: { enabled: false },
+                interaction: { dragNodes: true, selectConnectedEdges: false },
+                manipulation: {
+                    enabled: true, addNode: false, initiallyActive: false,
+                    addEdge: function (data, callback) {
+                        if (!document.getElementById('engineeringSwitch').checked) {
+                            alert("⚠️ MODO ENGENHARIA BLOQUEADO!\nAtive o switch no topo desta seção para criar links.");
+                            callback(null); return;
+                        }
+                        if (data.from == data.to) { alert("Não pode conectar nele mesmo."); callback(null); return; }
+                        const km = prompt("Distância (KM)?\n(Deixe 0 se não souber)", "0");
+                        if (km !== null) { 
+                            fetch('/api/debug/databook/save_link', {
+                                method: 'POST', headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({ origem_id: data.from, destino_id: data.to, km: km })
+                            }).then(r => r.json()).then(res => {
+                                if(res.success) { data.label = km + " km"; callback(data); } 
+                                else { alert("Erro: " + res.message); callback(null); }
+                            }).catch(e => { alert("Erro de rede"); callback(null); });
+                        } else { callback(null); }
+                    },
+                    deleteEdge: function(data, callback) {
+                        if (!document.getElementById('engineeringSwitch').checked) {
+                            alert("⚠️ MODO ENGENHARIA BLOQUEADO!\nAtive o switch para deletar.");
+                            callback(null); return;
+                        }
+                        const edgeId = data.edges[0];
+                        const edge = edgesDataSet.get(edgeId);
+                        if(confirm("Remover conexão física?")) {
+                            fetch('/api/debug/databook/delete_link', {
+                                method: 'POST', headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({ origem_id: edge.from, destino_id: edge.to })
+                            }).then(r => r.json()).then(res => {
+                                if(res.success) callback(data); else alert("Erro: " + res.message);
+                            });
+                        } else { callback(null); }
+                    },
+                    editEdge: false, deleteNode: false 
+                }
+            };
+
+            if(networkBuilder) networkBuilder.destroy();
+            networkBuilder = new vis.Network(container, visData, options);
+
+            networkBuilder.on("dragEnd", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const positions = networkBuilder.getPositions([nodeId]);
+                    const pos = positions[nodeId];
+                    fetch('/api/debug/databook/save_position', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ anel_id: anelId, elemento_id: nodeId, x: Math.round(pos.x), y: Math.round(pos.y) })
+                    }).then(r => r.json()).then(result => { if(!result.success) console.log("Posição não salva."); });
+                }
+            });
+
+            networkBuilder.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const nodeData = nodesDataSet.get(nodeId);
+                    currentSelection = { type: 'node', id: nodeId };
+                    
+                    if(document.getElementById('link_src')) {
+                        if(!document.getElementById('link_src').value) document.getElementById('link_src').value = nodeId;
+                        else document.getElementById('link_dst').value = nodeId;
+                    }
+
+                    document.getElementById('panel_add').style.display = 'none';
+                    document.getElementById('panel_edit').style.display = 'block';
+                    document.getElementById('edit_link_area').style.display = 'none';
+
+                    document.getElementById('edit_node_id').value = nodeId;
+                    document.getElementById('edit_name_display').innerText = nodeData.original_name || nodeData.label;
+                    
+                    let iconVal = 'roadm';
+                    if(nodeData.shape === 'triangle') iconVal = 'switch';
+                    if(nodeData.shape === 'box') iconVal = 'foadm';
+                    if(nodeData.shape === 'dot') iconVal = 'passivo';
+                    document.getElementById('edit_icon').value = iconVal;
+                    document.getElementById('edit_passive').checked = (nodeData.color === '#dddddd');
+
+                    document.getElementById('inp_db_site_id').value = nodeData.site_id || '';
+                    document.getElementById('inp_db_cidade').value = nodeData.cidade || '';
+                    document.getElementById('inp_db_uf').value = nodeData.uf || '';
+                    document.getElementById('inp_db_endereco').value = nodeData.endereco || '';
+                    document.getElementById('inp_db_detentor').value = nodeData.detentor || '';
+                    
+                    let sigla = "";
+                    if(nodeData.site_id && nodeData.site_id.length >= 3) sigla = nodeData.site_id.substring(0, 3);
+                    document.getElementById('inp_db_sigla').value = sigla;
+
+                } else if (params.edges.length > 0) {
+                    const edgeId = params.edges[0];
+                    const edgeData = edgesDataSet.get(edgeId);
+                    currentSelection = { type: 'edge', src: edgeData.from, dst: edgeData.to };
+
+                    document.getElementById('panel_add').style.display = 'none';
+                    document.getElementById('panel_edit').style.display = 'none'; 
+                    document.getElementById('edit_link_area').style.display = 'block';
+
+                    document.getElementById('edit_link_label').innerText = `${edgeData.from} ↔ ${edgeData.to}`;
+                    let km = edgeData.label ? parseFloat(edgeData.label.replace(' km', '')) : '';
+                    document.getElementById('edit_km').value = km;
+                } else {
+                    closeEditPanel();
+                }
+            });
+        }
+
+        async function saveMetadata() {
+            const anelId = document.getElementById('db_anel_selector').value;
+            const payload = {
+                anel_id: anelId,
+                coerencia: document.getElementById('meta_coerencia').value,
+                matriz_otn: document.getElementById('meta_otn').value,
+                swap_info: document.getElementById('meta_swap').value,
+                complemento_tecnologia: document.getElementById('meta_tec').value,
+                status_construcao: 'publicado'
+            };
+            await fetch('/api/debug/databook/save_metadata', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            alert("Salvo!");
+        }
+
+        function detectVendorPreview() {
+            const nome = document.getElementById('new_node_name').value.toUpperCase();
+            const iconSelect = document.getElementById('new_node_icon');
+            const optFoadm = document.getElementById('opt_foadm');
+            
+            if(nome.includes('IFW') || nome.includes('CTW')) {
+                optFoadm.disabled = false; optFoadm.innerText = "▬ Retângulo (FOADM - Infinera)";
+            } else {
+                optFoadm.disabled = true; optFoadm.innerText = "▬ Retângulo (Apenas Infinera)";
+                if(iconSelect.value === 'foadm') iconSelect.value = 'roadm';
+            }
+            if(iconSelect.value === 'roadm') {
+                if(nome.includes('OLAS') || nome.includes('SWITCH')) iconSelect.value = 'switch';
+            }
+        }
+
+        async function addDbNode() {
+            const anelId = document.getElementById('db_anel_selector').value;
+            const nome = document.getElementById('new_node_name').value;
+            const icon = document.getElementById('new_node_icon').value;
+            const passive = document.getElementById('new_node_passive').checked ? 1 : 0;
+
+            if(!nome) return alert("Digite um nome!");
+            const payload = { anel_id: anelId, nome: nome, tipo_icone: icon, is_passive: passive };
+
+            const resp = await fetch('/api/debug/databook/add_node', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            const res = await resp.json();
+            if(res.success) {
+                document.getElementById('new_node_name').value = '';
+                loadDatabookSection();
+            } else { alert("Erro: " + res.message); }
+        }
+
+        async function saveFullNodeDetails() {
+            if(!currentSelection || currentSelection.type !== 'node') return;
+            const id = document.getElementById('edit_node_id').value;
+            const payload = {
+                id: id,
+                tipo_icone: document.getElementById('edit_icon').value,
+                is_passive: document.getElementById('edit_passive').checked ? 1 : 0,
+                site_id: document.getElementById('inp_db_site_id').value.toUpperCase(),
+                cidade: document.getElementById('inp_db_cidade').value,
+                uf: document.getElementById('inp_db_uf').value.toUpperCase(),
+                endereco: document.getElementById('inp_db_endereco').value,
+                detentor: document.getElementById('inp_db_detentor').value.toUpperCase() 
+            };
+
+            try {
+                await fetch('/api/debug/databook/update_node_details', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        id: id, 
+                        nome: document.getElementById('edit_name_display').innerText,
+                        tipo_icone: payload.tipo_icone,
+                        is_passive: payload.is_passive
+                    })
+                });
+
+                const resp = await fetch('/api/debug/databook/save_node_details', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+                });
+                const res = await resp.json();
+                if(res.success) {
+                    loadDatabookSection(); 
+                    alert("✅ Dados salvos com sucesso!");
+                } else { alert("Erro ao salvar dados: " + res.message); }
+            } catch(e) { alert("Erro de conexão: " + e); }
+        }
+
+        async function addDbLink(isUpdate = false) {
+            let src, dst, km;
+            if(isUpdate) {
+                if(!currentSelection || currentSelection.type !== 'edge') return;
+                src = currentSelection.src; dst = currentSelection.dst;
+                km = document.getElementById('edit_km').value;
+            } else {
+                if(document.getElementById('link_src')) src = document.getElementById('link_src').value;
+                if(document.getElementById('link_dst')) dst = document.getElementById('link_dst').value;
+                if(document.getElementById('link_km')) km = document.getElementById('link_km').value;
+            }
+
+            if(!src || !dst) return alert("IDs inválidos!");
+            const payload = { origem_id: src, destino_id: dst, km: km };
+
+            const resp = await fetch('/api/debug/databook/save_link', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            const res = await resp.json();
+            if(res.success) {
+                if(!isUpdate) {
+                    if(document.getElementById('link_src')) document.getElementById('link_src').value = '';
+                    if(document.getElementById('link_dst')) document.getElementById('link_dst').value = '';
+                    if(document.getElementById('link_km')) document.getElementById('link_km').value = '';
+                }
+                loadDatabookSection();
+            } else { alert("Erro: " + res.message); }
+        }
+
+        async function deleteSelected() {
+            if(!currentSelection) return;
+            if(!confirm("Remover este item do desenho?\n(O elemento continua existindo no banco de dados)")) return;
+
+            let url = '';
+            let payload = {};
+
+            if(currentSelection.type === 'node') {
+                url = '/api/debug/databook/remove_node_from_ring';
+                payload = { elemento_id: currentSelection.id, anel_id: document.getElementById('db_anel_selector').value };
+            } else if(currentSelection.type === 'edge') {
+                url = '/api/debug/databook/delete_link';
+                payload = { origem_id: currentSelection.src, destino_id: currentSelection.dst };
+            }
+
+            const resp = await fetch(url, {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            const res = await resp.json();
+            
+            if(res.success) {
+                closeEditPanel();
+                loadDatabookSection();
+            } else { alert("Erro: " + res.message); }
+        }
+
+        function closeEditPanel() {
+            currentSelection = null;
+            document.getElementById('panel_edit').style.display = 'none';
+            document.getElementById('edit_link_area').style.display = 'none';
+            document.getElementById('panel_add').style.display = 'block';
+            if(document.getElementById('link_src')) document.getElementById('link_src').value = '';
+            if(document.getElementById('link_dst')) document.getElementById('link_dst').value = '';
+        }
+    </script>
+</body>
+</html>

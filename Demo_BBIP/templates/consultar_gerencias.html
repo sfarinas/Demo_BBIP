@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Gerências e Tecnologias{% endblock %}
+
+{% block main_content %}
+    
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Gerências Cadastradas (TX)</h2>
+        <a href="{{ url_for('cadastrar_gerencia') }}" class="button" style="background-color: #2196F3; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+            + Nova Gerência
+        </a>
+    </div>
+    
+    {% if gerencias %}
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+                <tr style="background-color: #f1f1f1; border-bottom: 2px solid #ccc;">
+                    <th style="padding: 10px; text-align: left; width: 10%;">ID</th>
+                    <th style="padding: 10px; text-align: left;">Nome da Gerência</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gerencia in gerencias %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">{{ gerencia.id }}</td>
+                        <td style="padding: 10px; font-weight: bold;">{{ gerencia.nome_gerencia }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nenhuma gerência cadastrada ainda.</p>
+    {% endif %}
+
+    <div style="margin: 40px 0; border-top: 2px dashed #ccc;"></div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="color: #006064;">Tecnologias / Fabricantes (Dados)</h2>
+        <a href="{{ url_for('cadastrar_gerencia') }}" class="button" style="background-color: #00acc1; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+            + Nova Tecnologia
+        </a>
+    </div>
+
+    {% if fabricantes %}
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+                <tr style="background-color: #e0f7fa; border-bottom: 2px solid #b2ebf2;">
+                    <th style="padding: 10px; text-align: left; width: 10%; color: #006064;">ID</th>
+                    <th style="padding: 10px; text-align: left; color: #006064;">Nome do Fabricante / Tecnologia</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fab in fabricantes %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">{{ fab.id }}</td>
+                        <td style="padding: 10px; font-weight: bold; color: #333;">{{ fab.nome_fabricante }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: #666; font-style: italic; background: #f9f9f9; padding: 10px; border-radius: 4px;">
+            Nenhuma tecnologia de dados encontrada.<br>
+            <small>(Se você já cadastrou, certifique-se de que atualizamos o app.py para enviar a lista 'fabricantes' para esta página)</small>
+        </p>
+    {% endif %}
+
+{% endblock %}

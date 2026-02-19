@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Consultar Links de Capacidade{% endblock %}
+{% block main_content %}
+<h2>Links de Capacidade Cadastrados</h2>
+<p><a href="{{ url_for('cadastrar_link_capacidade') }}" class="button">Cadastrar Novo Link</a></p>
+{% if links %}
+    <table>
+        <thead>
+            <tr>
+                <th>Elemento A</th>
+                <th>Facilidades A</th>
+                <th>Elemento B</th>
+                <th>Facilidades B</th>
+                <th>Provedor</th>
+                <th>Ações</th> </tr>
+        </thead>
+        <tbody>
+            {% for link in links %}
+            <tr>
+                <td>{{ link.nome_elemento_a }}</td>
+                <td>{{ link.facilidades_a }}</td>
+                <td>{{ link.nome_elemento_b }}</td>
+                <td>{{ link.facilidades_b }}</td>
+                <td>{{ link.nome_detentor }}</td>
+                <td>
+                    <form action="{{ url_for('excluir_link_capacidade', link_id=link.id) }}" method="post" onsubmit="return confirm('Tem certeza que deseja excluir este link?');">
+                        <button type="submit" class="button" style="background-color: #dc3545;">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum link de capacidade cadastrado ainda.</p>
+{% endif %}
+{% endblock %}

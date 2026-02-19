@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastrar Link de Capacidade{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        function updateReportPreview() {
+            const elemA = document.getElementById('nome_elemento_a').value.trim() || '[Elemento A]';
+            const elemB = document.getElementById('nome_elemento_b').value.trim() || '[Elemento B]';
+            const facilA = document.getElementById('facilidades_a').value.trim() || 'N/A';
+            const facilB = document.getElementById('facilidades_b').value.trim() || 'N/A';
+            const provedorSelect = document.getElementById('detentor_site_id');
+            const provedorNome = provedorSelect.options[provedorSelect.selectedIndex]?.text || '[Provedor do Link]';
+            const gerenciaSelect = document.getElementById('gerencia_id');
+            const gerenciaNome = gerenciaSelect.options[gerenciaSelect.selectedIndex]?.text || '[Gerência]';
+
+            const nextUpdateTime = new Date(new Date().getTime() + 90 * 60 * 1000);
+            const formattedNextUpdate = nextUpdateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute:'2-digit' });
+
+            const reportTitle = `Falha no Link de Capacidade do provedor ${provedorNome}`;
+            const reportDescription = [
+                `Falha no Link de Capacidade do Provedor "${provedorNome}" entre os elementos, "${elemA}" e "${elemB}"`,
+                `Gerência: ${gerenciaNome}`,
+                `\nElemento A: ${elemA} + Facilidades A: ${facilA}`,
+                `X`,
+                `Elemento B: ${elemB} + Facilidades B: ${facilB}`,
+                `\nAcionado equipe SOM. Proxima Atualização as ${formattedNextUpdate}`
+            ].join('\n');
+
+            document.getElementById('report_output').innerHTML = `
+                <h4>Título Sugerido:</h4>
+                <p><strong>${reportTitle}</strong></p>
+                <h4>Descrição Sugerida:</h4>
+                <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #f0f0f0; padding: 10px; border-radius: 5px;">${reportDescription}</pre>
+            `;
+        }
+
+        // Adiciona listeners para todos os campos relevantes
+        const allInputs = document.querySelectorAll('input, select, textarea');
+        allInputs.forEach(el => {
+            el.addEventListener('input', updateReportPreview);
+            if (el.tagName === 'SELECT') {
+                el.addEventListener('change', updateReportPreview);
+            }
+        });
+
+        // Atualiza a pré-visualização ao carregar a página
+        updateReportPreview();
+    });
+</script>
+{% endblock %}
+
+{% block main_content %}
+<h2>Cadastrar Novo Link de Capacidade</h2>
+<p>Cadastre aqui os links de capacidade. Novos elementos e um evento de falha serão criados automaticamente.</p>
+<form method="POST">
+    <label for="rascunho_texto">Rascunho:</label>
+    <textarea id="rascunho_texto" name="rascunho_texto" rows="4">{{ prev_data.rascunho_texto | default('') }}</textarea>
+
+    <label for="nome_elemento_a">Elemento A:</label>
+    <input type="text" id="nome_elemento_a" name="nome_elemento_a" required list="elementos_list"
+           value="{{ prev_data.nome_elemento_a | default('') }}" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+
+    <label for="facilidades_a">Facilidades A:</label>
+    <input type="text" id="facilidades_a" name="facilidades_a" value="{{ prev_data.facilidades_a | default('') }}" pattern="[^:<>"]*" title="O campo não pode conter os caracteres : < > &quot;">
+
+    <hr style="margin: 20px 0;">
+
+    <label for="nome_elemento_b">Elemento B:</label>
+    <input type="text" id="nome_elemento_b" name="nome_elemento_b" required list="elementos_list"
+           value="{{ prev_data.nome_elemento_b | default('') }}" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+
+    <label for="facilidades_b">Facilidades B:</label>
+    <input type="text" id="facilidades_b" name="facilidades_b" value="{{ prev_data.facilidades_b | default('') }}" pattern="[^:<>"]*" title="O campo não pode conter os caracteres : < > &quot;">
+
+    <hr style="margin: 20px 0;">
+
+    <h3>Dados Comuns</h3>
+    <label for="gerencia_id">Gerência (para novos elementos):</label>
+    <select id="gerencia_id" name="gerencia_id" required>
+        <option value="">Selecione a Gerência</option>
+        {% for gerencia in gerencias %}
+            <option value="{{ gerencia.id }}" {% if prev_data.gerencia_id|string == gerencia.id|string %}selected{% endif %}>{{ gerencia.nome_gerencia }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="detentor_site_id">Provedor do Link:</label>
+    <select id="detentor_site_id" name="detentor_site_id" required>
+        <option value="">Selecione o Provedor</option>
+        {% for detentor in detentores_site %}
+            <option value="{{ detentor.id }}" {% if prev_data.detentor_site_id|string == detentor.id|string %}selected{% endif %}>{{ detentor.nome_detentor }}</option>
+        {% endfor %}
+    </select>
+
+    <datalist id="elementos_list">
+        {% for elemento in elementos %}
+            <option value="{{ elemento.nome_elemento }}">
+        {% endfor %}
+    </datalist>
+
+    <h3>Pré-visualização do Relatório:</h3>
+    <div id="report_output" style="border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; border-radius: 8px; margin-bottom: 20px;">
+        <p>Preencha os campos para ver a pré-visualização.</p>
+    </div>
+
+    <button type="submit">Cadastrar Link e Criar Evento</button>
+</form>
+{% endblock %}

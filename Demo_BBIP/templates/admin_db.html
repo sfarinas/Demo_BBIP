@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Painel Administrativo do Banco{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid">
+    <h2 class="mb-4">🔍 Explorador de Banco de Dados</h2>
+    
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label>Selecione a Tabela:</label>
+            <select id="tableSelect" class="form-control" onchange="loadTable()">
+                <option value="">-- Escolha --</option>
+                {% for table in tables %}
+                    <option value="{{ table }}">{{ table }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label>Pesquisar (Filtro):</label>
+            <input type="text" id="searchInput" class="form-control" placeholder="Digite para filtrar..." onkeyup="filterTable()">
+        </div>
+    </div>
+
+    <div id="loading" style="display:none;">Carregando dados...</div>
+    
+    <div class="table-responsive" style="max-height: 700px; overflow: auto;">
+        <table class="table table-bordered table-hover table-striped" id="dataTable">
+            <thead class="thead-dark" id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let currentTable = "";
+
+    async function loadTable() {
+        const tableName = document.getElementById('tableSelect').value;
+        if (!tableName) return;
+        currentTable = tableName;
+
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('tableHead').innerHTML = '';
+        document.getElementById('tableBody').innerHTML = '';
+
+        try {
+            const response = await fetch(`/api/get_table_content/${tableName}`);
+            const data = await response.json();
+            
+            renderTable(data.columns, data.data);
+        } catch (error) {
+            alert('Erro ao carregar tabela');
+            console.error(error);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    function renderTable(columns, rows) {
+        const thead = document.getElementById('tableHead');
+        const tbody = document.getElementById('tableBody');
+
+        // Cabeçalho
+        let headerHTML = '<tr>';
+        columns.forEach(col => headerHTML += `<th>${col}</th>`);
+        headerHTML += '<th>Ações</th></tr>';
+        thead.innerHTML = headerHTML;
+
+        // Linhas
+        let bodyHTML = '';
+        rows.forEach(row => {
+            bodyHTML += `<tr>`;
+            columns.forEach(col => {
+                const val = row[col] === null ? 'NULL' : row[col];
+                // Adiciona evento de duplo clique para editar
+                bodyHTML += `<td ondblclick="editCell(this, '${row.id}', '${col}')" title="Duplo clique para editar">${val}</td>`;
+            });
+            // Botão de Deletar
+            bodyHTML += `<td><button class="btn btn-danger btn-sm" onclick="deleteRow(${row.id})">X</button></td>`;
+            bodyHTML += `</tr>`;
+        });
+        tbody.innerHTML = bodyHTML;
+    }
+
+    function editCell(td, id, column) {
+        if (column === 'id') { alert('Não edite o ID!'); return; }
+        
+        const originalValue = td.innerText;
+        const newValue = prompt(`Editar ${column} (ID: ${id}):`, originalValue);
+
+        if (newValue !== null && newValue !== originalValue) {
+            updateData(id, column, newValue);
+            td.innerText = newValue;
+            td.style.backgroundColor = '#d4edda'; // Marca como editado (verde claro)
+        }
+    }
+
+    async function updateData(id, column, value) {
+        await fetch('/api/admin_update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ table: currentTable, id: id, column: column, value: value })
+        });
+    }
+
+    async function deleteRow(id) {
+        if (!confirm(`Tem certeza que deseja deletar o registro ID ${id} da tabela ${currentTable}?`)) return;
+
+        const response = await fetch('/api/admin_delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ table: currentTable, id: id })
+        });
+        
+        if (response.ok) {
+            loadTable(); // Recarrega a tabela
+        } else {
+            alert('Erro ao deletar.');
+        }
+    }
+
+    function filterTable() {
+        const input = document.getElementById("searchInput");
+        const filter = input.value.toUpperCase();
+        const table = document.getElementById("dataTable");
+        const tr = table.getElementsByTagName("tr");
+
+        for (let i = 1; i < tr.length; i++) {
+            let visible = false;
+            const tds = tr[i].getElementsByTagName("td");
+            for (let j = 0; j < tds.length; j++) {
+                if (tds[j]) {
+                    if (tds[j].innerHTML.toUpperCase().indexOf(filter) > -1) {
+                        visible = true;
+                        break;
+                    }
+                }
+            }
+            tr[i].style.display = visible ? "" : "none";
+        }
+    }
+</script>
+{% endblock %}

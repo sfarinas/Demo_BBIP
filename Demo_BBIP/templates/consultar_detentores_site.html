@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Provedores da Fibra{% endblock %}
+
+{% block main_content %}
+    <h2>Provedores da Fibra Cadastrados</h2> {# Atualizado aqui #}
+    <p><a href="{{ url_for('cadastrar_detentor_site') }}" class="button">Cadastrar Novo Provedor da Fibra</a></p> {# Atualizado aqui #}
+    {% if detentores %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome do Provedor</th> {# Atualizado aqui #}
+                </tr>
+            </thead>
+            <tbody>
+                {% for detentor in detentores %}
+                    <tr>
+                        <td>{{ detentor.id }}</td>
+                        <td>{{ detentor.nome_detentor }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nenhum provedor da fibra cadastrado ainda.</p> {# Atualizado aqui #}
+    {% endif %}
+{% endblock %}

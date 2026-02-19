@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Associar Elemento e Provedor a Anel{% endblock %}
+
+{% block main_content %}
+    <h2>Associar Elemento e Provedor a um Anel</h2>
+    <form method="POST">
+        <label for="elemento_id">Elemento:</label>
+        <select id="elemento_id" name="elemento_id" required>
+            <option value="">Selecione o Elemento</option>
+            {% for elemento in elementos %}
+                <option value="{{ elemento.id }}">{{ elemento.nome_elemento }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="anel_id">Anel:</label>
+        <select id="anel_id" name="anel_id" required>
+            <option value="">Selecione o Anel</option>
+            {% for anel in aneis %}
+                <option value="{{ anel.id }}">{{ anel.nome_anel }}</option>
+            {% endfor %}
+        </select>
+        <p class="small-text">O elemento selecionado acima será associado a este anel.</p>
+
+        <label for="detentor_site_id">Definir/Atualizar Provedor para o Anel selecionado:</label>
+        <select id="detentor_site_id" name="detentor_site_id">
+            <option value="">-- Não alterar o provedor --</option>
+            {% for detentor in detentores_site %}
+                <option value="{{ detentor.id }}">{{ detentor.nome_detentor }}</option>
+            {% endfor %}
+        </select>
+        <p class="small-text">Selecione um provedor para definir como o principal deste anel.</p>
+
+        <button type="submit">Executar Associação</button>
+    </form>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Correlacionar Alarmes do Evento {{ evento.id }}{% endblock %}
+
+{% block main_content %}
+    <h2>Correlacionar Alarmes (Ensinar o Sistema)</h2>
+    <p>Ajude o sistema a aprender. Quais dos alarmes abaixo foram causados pelo evento principal?</p>
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card mb-3">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Evento Principal (Causa Raiz)</h5>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ evento.titulo }} (ID: {{ evento.id }})</h5>
+                    <hr>
+                    <p><strong>Alarmes deste Evento:</strong></p>
+                    {% if alarmes_do_evento %}
+                        <ul class="list-group">
+                        {% for alarme in alarmes_do_evento %}
+                            <li class="list-group-item">
+                                <strong>{{ alarme.nome_tipo_alarme }}</strong> em <strong>{{ alarme.nome_elemento }}</strong>
+                                <br>
+                                <small class="text-muted">{{ alarme.data_hora | utc_to_local }}</small>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Nenhum alarme principal associado.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Vizinhos Físicos (Para Verificação Manual)</h5>
+                </div>
+                <div class="card-body">
+                    <p>Estes elementos estão <strong>fisicamente conectados</strong> aos elementos do evento. Verifique-os em suas ferramentas:</p>
+                    {% if vizinhos_detalhes %}
+                        <ul class="list-group">
+                        {% for vizinho in vizinhos_detalhes %}
+                            <li class="list-group-item">
+                                <strong>{{ vizinho.nome_elemento }}</strong>
+                                <br>
+                                <small class="text-muted">Gerência: {{ vizinho.nome_gerencia }} | Estado: {{ vizinho.estado_atual }}</small>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Nenhum vizinho físico direto encontrado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card mb-3">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Alarmes em Vizinhos (Candidatos a Filhos)</h5>
+                </div>
+                <div class="card-body">
+                    <p>Marque os alarmes abaixo que são uma <strong>consequência</strong> (filho) do evento principal:</p>
+                    
+                    <form method="POST" action="{{ url_for('correlacionar_alarmes_evento', evento_id=evento.id) }}">
+                        {% if alarmes_candidatos %}
+                            <ul class="list-group">
+                            {% for alarme in alarmes_candidatos %}
+                                <li class="list-group-item">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="alarme_filho_id" value="{{ alarme.id }}" id="check-{{ alarme.id }}">
+                                        <label class="form-check-label" for="check-{{ alarme.id }}">
+                                            <strong>{{ alarme.nome_tipo_alarme }}</strong> em <strong>{{ alarme.nome_elemento }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ alarme.data_hora | utc_to_local }}</small>
+                                        </label>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                            </ul>
+                            <button type="submit" class="btn btn-success mt-3">Salvar Correlação (Ensinar)</button>
+                        {% else %}
+                            <p class="text-muted">Nenhum alarme candidato (ativo nas últimas 24h) encontrado nos vizinhos.</p>
+                            <a href="{{ url_for('relatorio_eventos') }}" class="btn btn-primary mt-3">Concluir e Voltar ao Relatório</a>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Vizinhos de Site (Colocados)</h5>
+                </div>
+                <div class="card-body">
+                    <p>Estes elementos estão no <strong>mesmo site</strong> (mesmo prefixo) dos elementos do evento. Verifique-os por falhas de infraestrutura (ex: energia):</p>
+                    {% if elementos_colocados %}
+                        <ul class="list-group">
+                        {% for elem in elementos_colocados %}
+                            <li class="list-group-item">
+                                <strong>{{ elem.nome_elemento }}</strong>
+                                <br>
+                                <small class="text-muted">Gerência: {{ elem.nome_gerencia }} | Estado: {{ elem.estado_atual }}</small>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Nenhum outro elemento encontrado no(s) mesmo(s) site(s).</p>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+{% endblock %}

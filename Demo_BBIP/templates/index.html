@@ -1,0 +1,1042 @@
+{% extends "base.html" %}
+
+{% block title %}Painel de Monitoramento Unificado{% endblock %}
+
+{% block scripts_extra %}
+<style>
+    /* --- ESTILOS GERAIS & AUTOCOMPLETE --- */
+    .autocomplete-container { position: relative; }
+    .autocomplete-suggestions {
+        position: absolute; border: 1px solid #ddd; border-top: none; z-index: 99;
+        top: 100%; left: 0; right: 0; background-color: white;
+        max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .autocomplete-suggestion-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+    .autocomplete-suggestion-item:hover { background-color: #e9e9e9; }
+
+    /* --- ESTILOS DAS ABAS --- */
+    .tab-container {
+        display: flex; border-bottom: 3px solid #007bff; margin-bottom: 25px;
+        background-color: #f8f9fa; padding-top: 10px; padding-left: 10px; border-radius: 5px 5px 0 0;
+    }
+    .tab-button {
+        padding: 12px 25px; cursor: pointer; font-weight: bold; background: transparent;
+        border: none; outline: none; transition: 0.3s; border-radius: 5px 5px 0 0;
+        margin-right: 5px; color: #666; font-size: 14px; display: flex; align-items: center; gap: 8px;
+    }
+    .tab-button:hover { background-color: #e2e6ea; color: #333; }
+    .tab-button.active { background-color: #007bff; color: white; box-shadow: 0 -2px 5px rgba(0,0,0,0.1); }
+    .tab-content { display: none; animation: fadeIn 0.4s ease-in-out; }
+    .tab-content.active { display: block; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* --- ESTILOS DO MÓDULO DADOS --- */
+    .dados-card {
+        background: #fff; border: 1px solid #e0e0e0; padding: 20px;
+        border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 4px solid #17a2b8;
+    }
+    .dados-card h4 { 
+        margin-top: 0; color: #17a2b8; border-bottom: 1px solid #eee; padding-bottom: 10px; 
+        margin-bottom: 15px; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    
+    .hop-list {
+        list-style: none; padding: 0; margin: 0; border: 1px solid #ccc; border-radius: 4px;
+        min-height: 50px; background: #fdfdfd; max-height: 250px; overflow-y: auto;
+    }
+    .hop-item {
+        padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;
+        transition: background 0.2s;
+    }
+    .hop-item:hover { background-color: #f0f8ff; }
+    .hop-number {
+        background: #17a2b8; color: white; border-radius: 50%; width: 24px; height: 24px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 12px; margin-right: 10px; font-weight: bold;
+    }
+    .btn-danger-sm {
+        background-color: #dc3545; color: white; border: none; border-radius: 3px;
+        padding: 2px 8px; font-size: 12px; cursor: pointer;
+    }
+
+    /* Estilo do Preview do Relatório */
+    .report-preview {
+        background-color: #f1f8e9; border: 1px solid #c5e1a5; padding: 15px;
+        border-radius: 5px; font-family: monospace; white-space: pre-wrap; margin-bottom: 20px;
+        color: #33691e;
+    }
+
+    .report-type-options { display: flex; gap: 20px; margin-bottom: 20px; background-color: #f0f0f0; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
+</style>
+
+<script>
+    // --- VARIÁVEL GLOBAL PARA OS SALTOS ---
+    let hopsList = []; 
+
+    function openTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(div => div.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        const buttons = document.querySelectorAll('.tab-button');
+        if(tabId === 'tab-tx') buttons[0].classList.add('active');
+        if(tabId === 'tab-dados') {
+            buttons[1].classList.add('active');
+            loadDadosAuxiliares();
+        }
+    }
+
+    async function loadDadosAuxiliares() {
+        if(document.getElementById('dados_origem_status').options.length > 0) return;
+        try {
+            const resp = await fetch('/api/dados/get_auxiliary_info');
+            const data = await resp.json();
+            
+            ['dados_origem_status', 'dados_destino_status'].forEach(id => {
+                const sel = document.getElementById(id);
+                data.status.forEach(s => { const opt = document.createElement('option'); opt.value = s.id; opt.innerText = s.nome_status; sel.appendChild(opt); });
+            });
+            ['dados_origem_fabricante', 'dados_destino_fabricante'].forEach(id => {
+                const sel = document.getElementById(id);
+                data.fabricantes.forEach(f => { const opt = document.createElement('option'); opt.value = f.id; opt.innerText = f.nome_fabricante; sel.appendChild(opt); });
+            });
+            ['dados_origem_alarme', 'dados_destino_alarme'].forEach(id => {
+                const sel = document.getElementById(id);
+                const optDef = document.createElement('option'); optDef.value=""; optDef.innerText="-- Nenhum --"; sel.appendChild(optDef);
+                data.alarmes.forEach(a => { const opt = document.createElement('option'); opt.value = a.id; opt.innerText = a.nome_alarme; sel.appendChild(opt); });
+            });
+        } catch(e) { console.error("Erro dados aux:", e); }
+    }
+
+    function toggleDestino(chk) {
+        const container = document.getElementById('container_destino');
+        const msg = document.getElementById('msg_sem_destino');
+        if(chk.checked) { container.style.display = 'block'; msg.style.display = 'none'; } 
+        else { container.style.display = 'none'; msg.style.display = 'block'; }
+        updateDadosReport(); // Atualiza relatório ao mudar
+    }
+
+    async function searchRouter(input, resultsDivId) {
+        const query = input.value;
+        const resDiv = document.getElementById(resultsDivId);
+        if(query.length < 2) { resDiv.style.display = 'none'; return; }
+        const resp = await fetch(`/api/dados/search_router?q=${query}`);
+        const data = await resp.json();
+        resDiv.innerHTML = '';
+        if(data.length > 0) {
+            resDiv.style.display = 'block';
+            data.forEach(router => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-suggestion-item';
+                div.innerHTML = `<b>${router.hostname}</b>`;
+                div.onclick = () => { 
+                    input.value = router.hostname; 
+                    resDiv.style.display = 'none'; 
+                    updateDadosReport(); // Atualiza relatório
+                };
+                resDiv.appendChild(div);
+            });
+        } else { resDiv.style.display = 'none'; }
+    }
+
+    async function searchTXElement(input) {
+        const query = input.value;
+        const resDiv = document.getElementById('sugestao_tx_hop');
+        if(query.length < 3) { resDiv.style.display = 'none'; return; }
+        const resp = await fetch(`/search_elementos?q=${encodeURIComponent(query)}`);
+        const data = await resp.json();
+        resDiv.innerHTML = '';
+        if(data.length > 0) {
+            resDiv.style.display = 'block';
+            data.forEach(elem => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-suggestion-item';
+                div.textContent = elem.nome_elemento;
+                div.onclick = () => { input.value = elem.nome_elemento; resDiv.style.display = 'none'; };
+                resDiv.appendChild(div);
+            });
+        } else { resDiv.style.display = 'none'; }
+    }
+
+
+    // --- NOVA FUNÇÃO: BUSCA REVERSA POR ACCID (O PULO DO GATO 2.0) ---
+    async function fetchCircuitByAccid() {
+        const accidInput = document.getElementById('dados_accid');
+        const accid = accidInput.value.trim();
+        if(!accid) return;
+
+        // Feedback visual
+        accidInput.style.borderColor = "#ffd700"; // Amarelo carregando
+
+        try {
+            const resp = await fetch('/api/dados/buscar_circuito_completo', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ accid: accid })
+            });
+            const data = await resp.json();
+
+            if(data.success && data.circuito) {
+                const c = data.circuito;
+                
+                // Preenche Roteador A
+                document.getElementById('dados_origem_hostname').value = c.orig_host || '';
+                if(c.orig_fab_id) document.getElementById('dados_origem_fabricante').value = c.orig_fab_id;
+                if(c.orig_status_id) document.getElementById('dados_origem_status').value = c.orig_status_id;
+                
+                // Preenche Roteador B
+                if(c.dest_host) {
+                    document.getElementById('dados_tem_destino').checked = true;
+                    toggleDestino(document.getElementById('dados_tem_destino'));
+                    document.getElementById('dados_destino_hostname').value = c.dest_host || '';
+                    if(c.dest_fab_id) document.getElementById('dados_destino_fabricante').value = c.dest_fab_id;
+                    if(c.dest_status_id) document.getElementById('dados_destino_status').value = c.dest_status_id;
+                }
+
+                // Preenche Rota TX (Limpa e Adiciona)
+                if(data.rota && data.rota.length > 0) {
+                    hopsList = []; // Zera lista atual
+                    data.rota.forEach(hop => {
+                        hopsList.push({ id: hop.id, nome: hop.nome_elemento });
+                    });
+                    renderHopsList();
+                }
+
+                // Preenche Obs se tiver
+                if(c.observacoes) document.getElementById('dados_observacoes').value = c.observacoes;
+
+                accidInput.style.borderColor = "#00ff41"; // Verde sucesso
+                updateDadosReport(); // Atualiza preview
+                alert(`✅ Dados carregados para ACCID ${accid}!`);
+            } else {
+                accidInput.style.borderColor = "#ccc"; // Volta ao normal
+                // Não alerta erro para não incomodar se for um accid novo
+            }
+        } catch(e) {
+            console.error("Erro busca accid:", e);
+            accidInput.style.borderColor = "red";
+        }
+    }
+
+    // Adiciona listener no campo ACCID
+    document.addEventListener('DOMContentLoaded', () => {
+        const accidInput = document.getElementById('dados_accid');
+        if(accidInput) {
+            accidInput.addEventListener('blur', fetchCircuitByAccid); // Quando sai do campo
+            accidInput.addEventListener('keypress', (e) => {
+                if(e.key === 'Enter') { e.preventDefault(); fetchCircuitByAccid(); }
+            });
+        }
+        
+        // Listeners originais...
+        const inputsDados = document.querySelectorAll('#formDados input, #formDados select, #formDados textarea');
+        inputsDados.forEach(el => {
+            el.addEventListener('input', updateDadosReport);
+            el.addEventListener('change', updateDadosReport);
+        });
+    });
+
+
+    // 5. Adicionar Salto (Hop) à Lista - COM CRIAÇÃO PROVISÓRIA
+    async function addHop() {
+        const input = document.getElementById('input_hop_tx');
+        const nome = input.value.trim();
+        
+        if(!nome) {
+            alert("Por favor, digite o nome do elemento.");
+            return;
+        }
+
+        // 1. Tenta buscar no banco oficial
+        try {
+            const resp = await fetch('/get_element_details', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({element_name: nome})
+            });
+            const data = await resp.json();
+            
+            if(data.success && data.element) {
+                // A. Elemento EXISTE -> Adiciona direto
+                const elem = data.element;
+                hopsList.push({ id: elem.id, nome: elem.nome_elemento });
+                renderHopsList();
+                input.value = '';
+                updateDadosReport(); 
+                
+            } else {
+                // B. Elemento NÃO EXISTE -> Oferece criar Provisório
+                const desejoCriar = confirm(`O elemento "${nome}" não foi encontrado na base oficial de TX.\n\nDeseja adicioná-lo como um ELEMENTO PROVISÓRIO na rota?`);
+                
+                if (desejoCriar) {
+                    criarElementoProvisorio(nome, input);
+                }
+            }
+        } catch(e) { 
+            console.error(e);
+            alert("Erro de comunicação ao validar elemento."); 
+        }
+    }
+
+    // Função auxiliar para criar o provisório
+    async function criarElementoProvisorio(nome, inputElement) {
+        try {
+            const resp = await fetch('/api/criar_elemento_provisorio', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nome_elemento: nome })
+            });
+            const data = await resp.json();
+
+            if (data.success && data.element) {
+                // Adiciona o novo elemento provisório na lista
+                hopsList.push({ id: data.element.id, nome: data.element.nome_elemento });
+                renderHopsList();
+                inputElement.value = ''; // Limpa o campo
+                updateDadosReport();
+                
+                // Feedback visual discreto (opcional)
+                // alert("Elemento provisório adicionado."); 
+            } else {
+                alert("Erro ao criar elemento provisório: " + data.message);
+            }
+        } catch (e) {
+            alert("Erro técnico ao criar provisório: " + e);
+        }
+    }
+
+    function renderHopsList() {
+        const ul = document.getElementById('lista_hops');
+        ul.innerHTML = '';
+
+        if(hopsList.length === 0) {
+            const liMsg = document.createElement('li');
+            liMsg.style.padding = "15px";
+            liMsg.style.color = "#aaa";
+            liMsg.style.textAlign = "center";
+            liMsg.id = "hop_empty_msg";
+            liMsg.innerText = "Nenhum salto adicionado.";
+            ul.appendChild(liMsg);
+        } else {
+            hopsList.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'hop-item';
+                li.innerHTML = `
+                    <div style="display:flex; align-items:center;">
+                        <span class="hop-number">${index + 1}</span>
+                        <div><b>${item.nome}</b></div>
+                    </div>
+                    <button type="button" class="btn-danger-sm" onclick="removeHop(${index})">Remover</button>
+                `;
+                ul.appendChild(li);
+            });
+        }
+    }
+
+    function removeHop(index) {
+        hopsList.splice(index, 1);
+        renderHopsList();
+        updateDadosReport(); // Atualiza relatório
+    }
+
+    // --- FUNÇÃO GERADORA DE RELATÓRIO (DADOS) ---
+    function updateDadosReport() {
+        // Coleta Origem
+        const hostA = document.getElementById('dados_origem_hostname').value || "[Roteador A]";
+        const fabASel = document.getElementById('dados_origem_fabricante');
+        const fabA = fabASel.options[fabASel.selectedIndex]?.text || "";
+        const stASel = document.getElementById('dados_origem_status');
+        const stA = stASel.options[stASel.selectedIndex]?.text || "";
+        const alarmeASel = document.getElementById('dados_origem_alarme');
+        const alarmeA = alarmeASel.value ? alarmeASel.options[alarmeASel.selectedIndex].text : "Sem Alarme";
+
+        // Coleta Destino
+        const temDestino = document.getElementById('dados_tem_destino').checked;
+        let infoDestino = "";
+        if (temDestino) {
+            const hostB = document.getElementById('dados_destino_hostname').value || "[Roteador B]";
+            const fabBSel = document.getElementById('dados_destino_fabricante');
+            const fabB = fabBSel.options[fabBSel.selectedIndex]?.text || "";
+            const stBSel = document.getElementById('dados_destino_status');
+            const stB = stBSel.options[stBSel.selectedIndex]?.text || "";
+            const alarmeBSel = document.getElementById('dados_destino_alarme');
+            const alarmeB = alarmeBSel.value ? alarmeBSel.options[alarmeBSel.selectedIndex].text : "Sem Alarme";
+            
+            infoDestino = ` indo ate (Roteador B (Destino): ${hostB}. Status: ${stB}, Fabricante: ${fabB}, Alarme Ativo: ${alarmeB})`;
+        } else {
+            infoDestino = " (Destino: Ponta única/Cliente/Nuvem)";
+        }
+
+        // Coleta Serviço
+        const accid = document.getElementById('dados_accid').value || "Sem ACCID informado";
+        const tipoFalha = document.getElementById('dados_tipo_falha').value;
+
+        // Coleta Rota Física
+        let infoRota = "Não informada";
+        if (hopsList.length > 0) {
+            const nomesRota = hopsList.map(h => h.nome).join(" -> ");
+            infoRota = nomesRota;
+        }
+
+        // Coleta Extra
+        const obs = document.getElementById('dados_observacoes').value;
+
+        // MONTA O TEXTO PADRÃO
+        let report = `Solicito apoio técnico para verificação de alarme no ACCID Dados (Circuito): "${accid}" com a falha de "Tipo de Falha: ${tipoFalha}".\n\n`;
+        
+        report += `O circuito começa em (Roteador A (Origem): ${hostA}. Status: ${stA}, Fabricante: ${fabA}, Alarme Ativo: ${alarmeA})${infoDestino}.\n\n`;
+        
+        report += `Onde a rota física passa por (ROTA FÍSICA (ELEMENTOS TX UTILIZADOS)):\n${infoRota}\n`;
+        
+        if (obs) {
+            report += `\nInformações Extras / Rascunho:\n${obs}`;
+        }
+
+        document.getElementById('dados_report_preview').innerText = report;
+    }
+
+    // Inicializa listeners para atualização em tempo real
+    document.addEventListener('DOMContentLoaded', () => {
+        const inputsDados = document.querySelectorAll('#formDados input, #formDados select, #formDados textarea');
+        inputsDados.forEach(el => {
+            el.addEventListener('input', updateDadosReport);
+            el.addEventListener('change', updateDadosReport);
+        });
+    });
+
+    async function submitDadosForm() {
+        const hopsIdsOnly = hopsList.map(h => h.id);
+        const payload = {
+            origem_hostname: document.getElementById('dados_origem_hostname').value,
+            origem_fabricante_id: document.getElementById('dados_origem_fabricante').value,
+            origem_status_id: document.getElementById('dados_origem_status').value,
+            origem_alarme_id: document.getElementById('dados_origem_alarme').value,
+            destino_hostname: document.getElementById('dados_tem_destino').checked ? document.getElementById('dados_destino_hostname').value : '',
+            destino_fabricante_id: document.getElementById('dados_destino_fabricante').value,
+            destino_status_id: document.getElementById('dados_destino_status').value,
+            destino_alarme_id: document.getElementById('dados_destino_alarme').value,
+            accid: document.getElementById('dados_accid').value,
+            tipo_falha: document.getElementById('dados_tipo_falha').value,
+            observacoes: document.getElementById('dados_observacoes').value,
+            rota_tx_ids: hopsIdsOnly
+        };
+
+        if(!payload.origem_hostname) { alert("Hostname de Origem é obrigatório!"); return; }
+
+        try {
+            const resp = await fetch('/cadastrar_circuito_dados', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const res = await resp.json();
+            
+            if(res.success) {
+                // SUCESSO! Redireciona para a página de detalhes
+                window.location.href = res.redirect_url; 
+            } else {
+                alert("Erro: " + res.message);
+            }
+        } catch(e) { alert("Erro de conexão: " + e); }
+    }
+
+    // =========================================================
+    // LÓGICA DO FORMULÁRIO TX (LEGADO - MANTIDA INTACTA)
+    // =========================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // --- SELEÇÃO DE ELEMENTOS DO FORMULÁRIO (TX) ---
+        const nomeElemento1Input = document.getElementById('nome_elemento1');
+        const nomeElemento2Input = document.getElementById('nome_elemento2');
+        const suggestions1Div = document.getElementById('suggestions1');
+        const suggestions2Div = document.getElementById('suggestions2');
+        const gerenciaComumSelect = document.getElementById('gerencia_id_comum');
+        const anelSelect = document.getElementById('anel_id_select');
+        const novoAnelInput = document.getElementById('novo_anel_nome');
+        const accidLcComumInput = document.getElementById('accid_lc_comum');
+        const longaDistanciaComumCheckbox = document.getElementById('longa_distancia_comum');
+        const swapFibraInfoInput = document.getElementById('swap_fibra_info');
+        
+        const tipoAlarme1Select = document.getElementById('tipo_alarme1_id_select');
+        const novoTipoAlarme1Input = document.getElementById('novo_tipo_alarme1_nome');
+        const suggestionsAlarme1Div = document.getElementById('suggestionsAlarme1');
+
+        const tipoAlarmes2Select = document.getElementById('tipo_alarmes2_ids_select');
+        const novoTipoAlarme2Input = document.getElementById('novo_tipo_alarme2_nome');
+        const suggestionsAlarme2Div = document.getElementById('suggestionsAlarme2');
+        
+        const estadoOrigemSelect = document.getElementById('estado_origem_id_select');
+        const novoEstadoOrigemInput = document.getElementById('novo_estado_origem_nome');
+        const estadoDestinoSelect = document.getElementById('estado_destino_id_select');
+        const novoEstadoDestinoInput = document.getElementById('novo_estado_destino_nome');
+        
+        const otdrCheckboxDiv = document.getElementById('otdr_checkbox_div');
+        const testeOtdrEmCursoCheckbox = document.getElementById('teste_otdr_em_curso');
+        const otdrKmInputDiv = document.getElementById('otdr_km_input_div');
+        const kmRompimentoOtdrInput = document.getElementById('km_rompimento_otdr');
+        const reportOutputDiv = document.getElementById('report_output');
+        const gerenciasOtdrRelevantes = ['HUAWEI_U2000', 'CISCO-EPNM'];
+
+        // --- LÓGICA DE AUTOCOMPLETE PARA ELEMENTOS (TX) ---
+        function setupAutocomplete(inputElement, suggestionsDiv, otherInputElement) {
+            inputElement.addEventListener('input', async function() {
+                const query = this.value;
+                suggestionsDiv.innerHTML = '';
+                suggestionsDiv.style.display = 'none';
+                if (query.length < 3) return;
+                const response = await fetch(`/search_elementos?q=${encodeURIComponent(query)}`);
+                const suggestions = await response.json();
+                if (suggestions.length > 0) {
+                    suggestionsDiv.style.display = 'block';
+                    suggestions.forEach(item => {
+                        const div = document.createElement('div');
+                        div.textContent = item.nome_elemento;
+                        div.classList.add('autocomplete-suggestion-item');
+                        div.addEventListener('click', function() {
+                            inputElement.value = item.nome_elemento;
+                            suggestionsDiv.innerHTML = '';
+                            suggestionsDiv.style.display = 'none';
+                            inputElement.dispatchEvent(new Event('change'));
+                            if (item.nome_vizinho && otherInputElement.value.trim() === '') {
+                                otherInputElement.value = item.nome_vizinho;
+                                otherInputElement.dispatchEvent(new Event('change'));
+                            }
+                        });
+                        suggestionsDiv.appendChild(div);
+                    });
+                }
+            });
+            document.addEventListener('click', function(e) {
+                if (e.target !== inputElement) {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+        }
+
+        // --- LÓGICA DE AUTOCOMPLETE PARA ANEL (TX) ---
+        function setupAnelAutocomplete(inputElement, suggestionsDiv, selectElement) {
+            inputElement.addEventListener('input', async function() {
+                const query = this.value;
+                suggestionsDiv.innerHTML = '';
+                suggestionsDiv.style.display = 'none';
+                if (query.length < 2) return;
+                const response = await fetch(`/search_aneis?q=${encodeURIComponent(query)}`);
+                const suggestions = await response.json();
+                if (suggestions.length > 0) {
+                    suggestionsDiv.style.display = 'block';
+                    suggestions.forEach(item => {
+                        const div = document.createElement('div');
+                        div.textContent = item.nome_anel;
+                        div.classList.add('autocomplete-suggestion-item');
+                        div.addEventListener('click', function() {
+                            selectElement.value = item.id;
+                            inputElement.value = '';
+                            suggestionsDiv.innerHTML = '';
+                            suggestionsDiv.style.display = 'none';
+                            selectElement.dispatchEvent(new Event('change'));
+                        });
+                        suggestionsDiv.appendChild(div);
+                    });
+                }
+            });
+            document.addEventListener('click', function(e) {
+                if (e.target !== inputElement) {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+        }
+
+        // --- LÓGICA DE AUTOCOMPLETE PARA ALARMES (TX) ---
+        function setupAlarmeAutocomplete(inputElement, suggestionsDiv, selectElement) {
+            inputElement.addEventListener('input', async function() {
+                const query = this.value;
+                suggestionsDiv.innerHTML = '';
+                if (query.length < 2) { suggestionsDiv.style.display = 'none'; return; }
+
+                const response = await fetch(`/search_tipos_alarmes?q=${encodeURIComponent(query)}`);
+                const suggestions = await response.json();
+
+                if (suggestions.length > 0) {
+                    suggestionsDiv.style.display = 'block';
+                    suggestions.forEach(item => {
+                        const div = document.createElement('div');
+                        div.textContent = item.nome_tipo_alarme;
+                        div.classList.add('autocomplete-suggestion-item');
+                        div.addEventListener('click', function() {
+                            if (selectElement.multiple) {
+                                Array.from(selectElement.options).forEach(opt => {
+                                    if (opt.value == item.id) opt.selected = true;
+                                });
+                            } else {
+                                selectElement.value = item.id;
+                            }
+                            inputElement.value = ''; 
+                            suggestionsDiv.style.display = 'none';
+                            selectElement.dispatchEvent(new Event('change'));
+                        });
+                        suggestionsDiv.appendChild(div);
+                    });
+                }
+            });
+            document.addEventListener('click', e => { if (e.target !== inputElement) suggestionsDiv.style.display = 'none'; });
+        }
+
+        // --- FUNÇÕES DE PREENCHIMENTO E LÓGICA GERAL (TX) ---
+        async function fetchElementDetailsAndFill(elementName, isElement1 = true) {
+            if (!elementName) return;
+            try {
+                const response = await fetch('/get_element_details', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ element_name: elementName }) });
+                const data = await response.json();
+                if (data.success && data.element) {
+                    const element = data.element;
+                    if (isElement1 || !gerenciaComumSelect.value) gerenciaComumSelect.value = element.gerencia_id || '';
+                    if (isElement1 || !longaDistanciaComumCheckbox.checked) longaDistanciaComumCheckbox.checked = element.longa_distancia || false;
+                    if (isElement1 && element.aneis_ids && element.aneis_ids.length > 0) {
+                        anelSelect.value = element.aneis_ids[0];
+                        novoAnelInput.value = '';
+                    }
+                    if (element.estado_atual_id) {
+                        const select = isElement1 ? estadoOrigemSelect : estadoDestinoSelect;
+                        const input = isElement1 ? novoEstadoOrigemInput : novoEstadoDestinoInput;
+                        updateDualInputState(select, input, element.estado_atual_id);
+                    }
+                }
+            } catch (error) { console.error(`Erro ao buscar detalhes:`, error); } finally {
+                fetchVizinhançaDetailsAndFill();
+                checkOtdrVisibility();
+                updateReportOutput();
+            }
+        }
+        
+        async function fetchVizinhançaDetailsAndFill() {
+            const elem1Name = nomeElemento1Input.value.trim();
+            const elem2Name = nomeElemento2Input.value.trim();
+            if (!elem1Name || !elem2Name) return;
+            try {
+                const response = await fetch('/get_vizinhança_details', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ element_origem_name: elem1Name, element_destino_name: elem2Name }) });
+                const data = await response.json();
+                if (data.success && data.vizinhança) {
+                    accidLcComumInput.value = data.vizinhança.accid_lc || '';
+                    swapFibraInfoInput.value = data.vizinhança.swap_fibra_info || 'TIM';
+                }
+            } catch (error) { console.error('Erro ao buscar vizinhança:', error); } finally {
+                updateReportOutput();
+            }
+        }
+
+        function setupDualInput(selectElement, newInputElement) { newInputElement.addEventListener('input', function() { if (this.value.trim() !== '') { if (selectElement.multiple) { Array.from(selectElement.options).forEach(option => option.selected = false); } else { selectElement.value = ''; } } }); selectElement.addEventListener('change', function() { if (this.value !== '' || this.multiple) { newInputElement.value = ''; } }); }
+        
+        function updateDualInputState(selectElement, newInputElement, valueToSet) { if (valueToSet) { let found = false; if (!isNaN(valueToSet) && selectElement.querySelector(`option[value="${valueToSet}"]`)) { selectElement.value = valueToSet; found = true; } if (found) { newInputElement.value = ''; } else { newInputElement.value = String(valueToSet).trim(); if (selectElement.multiple) { Array.from(selectElement.options).forEach(option => option.selected = false); } else { selectElement.value = ''; } } } else { selectElement.value = ''; newInputElement.value = ''; } }
+        
+        function checkOtdrVisibility() { if (!gerenciaComumSelect.value) { otdrCheckboxDiv.style.display = 'none'; otdrKmInputDiv.style.display = 'none'; return; } const gerenciaName = gerenciaComumSelect.options[gerenciaComumSelect.selectedIndex].text.trim().toUpperCase(); const showOtdrOption = gerenciasOtdrRelevantes.includes(gerenciaName); otdrCheckboxDiv.style.display = showOtdrOption ? 'block' : 'none'; if (!showOtdrOption) testeOtdrEmCursoCheckbox.checked = false; otdrKmInputDiv.style.display = showOtdrOption && testeOtdrEmCursoCheckbox.checked ? 'block' : 'none'; }
+
+        // --- ATUALIZAÇÃO DO RELATÓRIO (TX) ---
+        function updateReportOutput() {
+            const nomeElem1 = nomeElemento1Input.value.trim();
+            const nomeElem2 = nomeElemento2Input.value.trim();
+            const anelNome = anelSelect.options[anelSelect.selectedIndex]?.text.trim() || novoAnelInput.value.trim() || '[Anel]';
+            const tipoAlarme1Nome = tipoAlarme1Select.options[tipoAlarme1Select.selectedIndex]?.text.trim() || novoTipoAlarme1Input.value.trim() || '[Tipo Alarme 1]';
+            const estadoOrigemNome = estadoOrigemSelect.options[estadoOrigemSelect.selectedIndex]?.text.trim() || novoEstadoOrigemInput.value.trim() || '[Estado Origem]';
+            const estadoDestinoNome = estadoDestinoSelect.options[estadoDestinoSelect.selectedIndex]?.text.trim() || novoEstadoDestinoInput.value.trim() || '[Estado Destino]';
+            const otdrEmCurso = testeOtdrEmCursoCheckbox.checked;
+            const kmRompimento = kmRompimentoOtdrInput.value.trim();
+            const infoExtra = document.getElementById('info_extra').value.trim();
+            const rascunhoTexto = document.getElementById('rascunho_texto').value.trim();
+            
+            const reportType = document.querySelector('input[name="report_type"]:checked').value;
+            let reportDescription = [];
+
+            let firstLine = "";
+            if (reportType === 'link_capacidade') {
+                firstLine = `Falha no link de capacidade entre "${estadoOrigemNome}" para "${estadoDestinoNome}". (ANEL: ${anelNome})`;
+            } else if (reportType === 'atenuacao') {
+                firstLine = `Atenuação entre "${estadoOrigemNome}" para "${estadoDestinoNome}". (ANEL: ${anelNome})`;
+            } else if (reportType === 'degradacao') {
+                firstLine = `Degradação entre "${estadoOrigemNome}" para "${estadoDestinoNome}". (ANEL: ${anelNome})`;
+            } else { 
+                firstLine = otdrEmCurso 
+                    ? `Rompimento de fibra entre "${estadoOrigemNome}" para "${estadoDestinoNome}". (ANEL: ${anelNome})`
+                    : `Abertura do Enlace entre "${estadoOrigemNome}" para "${estadoDestinoNome}". (ANEL: ${anelNome})`;
+            }
+            reportDescription.push(firstLine);
+
+            let tiposAlarmes2Nomes = Array.from(tipoAlarmes2Select.selectedOptions).map(opt => opt.text.trim());
+            if (novoTipoAlarme2Input.value.trim()) {
+                tiposAlarmes2Nomes.push(novoTipoAlarme2Input.value.trim());
+            }
+
+            reportDescription.push(`\nELEMENTO 1: ${nomeElem1}`);
+            reportDescription.push(`\nELEMENTO 2: ${nomeElem2}`);
+            reportDescription.push(`\nAlarme Elemento 1: ${tipoAlarme1Nome}`);
+            reportDescription.push(`\nAlarmes Elemento Vizinho: ${tiposAlarmes2Nomes.length > 0 ? tiposAlarmes2Nomes.join(', ') : 'Não informados.'}`);
+            reportDescription.push(`\nACCID/LC: ${accidLcComumInput.value.trim() || 'Não informado.'}`);
+            reportDescription.push(`\nSwap de Fibra: ${swapFibraInfoInput.value.trim() || 'Não informado.'}`);
+            reportDescription.push(infoExtra ? `\nInformações extras: ${infoExtra}` : `\nInformações extras: Não há informações adicionais.`);
+            
+            reportDescription.push(`\n\n--- Regra do Teste OTDR ---`);
+            reportDescription.push(`\nTeste OTDR em curso: ${otdrEmCurso ? 'Sim' : 'Nao'}.`);
+
+            const equipeAcionada = swapFibraInfoInput.value.trim().toUpperCase() === 'TIM' ? "equipe de Campo" : "equipe SOM";
+            const nextUpdateTime = new Date(new Date().getTime() + 90 * 60 * 1000);
+            const formattedNextUpdate = nextUpdateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute:'2-digit' });
+
+            if (otdrEmCurso) {
+                reportDescription.push(`\nKM do Rompimento: ${kmRompimento || '[KM não informado]'}`);
+                reportDescription.push(`\nRompimento de fibra está próximo ao KM ${kmRompimento || '[informado no teste OTDR]'} de "${estadoOrigemNome}" para "${estadoDestinoNome}".`);
+            }
+            
+            reportDescription.push(`\n\nAcionado ${equipeAcionada}. Próxima atualização às: ${formattedNextUpdate}.`);
+            
+            if (rascunhoTexto) {
+                reportDescription.push(`\n\n--- Rascunho ---\n${rascunhoTexto}`);
+            }
+            
+            let reportTitle = `Alarme ${tipoAlarme1Nome} em ${nomeElem1} e ${nomeElem2} - Anel ${anelNome}`;
+            reportOutputDiv.innerHTML = `<h4>Título Sugerido:</h4><p><strong>${reportTitle}</strong></p><h4>Descrição Sugerida:</h4><pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #f0f0f0; padding: 10px; border-radius: 5px;">${reportDescription.join('')}</pre>`;
+        }
+
+        // --- INICIALIZAÇÃO E LISTENERS (TX) ---
+        setupAutocomplete(nomeElemento1Input, suggestions1Div, nomeElemento2Input);
+        setupAutocomplete(nomeElemento2Input, suggestions2Div, nomeElemento1Input);
+        setupAnelAutocomplete(novoAnelInput, document.getElementById('suggestionsAnel'), anelSelect);
+        setupAlarmeAutocomplete(novoTipoAlarme1Input, suggestionsAlarme1Div, tipoAlarme1Select);
+        setupAlarmeAutocomplete(novoTipoAlarme2Input, suggestionsAlarme2Div, tipoAlarmes2Select);
+
+        nomeElemento1Input.addEventListener('change', () => fetchElementDetailsAndFill(nomeElemento1Input.value.trim(), true));
+        nomeElemento2Input.addEventListener('change', () => fetchElementDetailsAndFill(nomeElemento2Input.value.trim(), false));
+
+        const allInputs = document.querySelectorAll('#tab-tx input, #tab-tx select, #tab-tx textarea');
+        allInputs.forEach(el => {
+            el.addEventListener('change', updateReportOutput);
+            if (el.tagName.toLowerCase() !== 'select') {
+                el.addEventListener('input', updateReportOutput);
+            }
+        });
+
+        gerenciaComumSelect.addEventListener('change', checkOtdrVisibility);
+        testeOtdrEmCursoCheckbox.addEventListener('change', checkOtdrVisibility);
+
+        setupDualInput(anelSelect, novoAnelInput);
+        setupDualInput(tipoAlarme1Select, novoTipoAlarme1Input);
+        setupDualInput(tipoAlarmes2Select, novoTipoAlarme2Input);
+        setupDualInput(estadoOrigemSelect, novoEstadoOrigemInput);
+        setupDualInput(estadoDestinoSelect, novoEstadoDestinoInput);
+        
+        checkOtdrVisibility();
+        updateReportOutput();
+    });
+</script>
+{% endblock %}
+
+{% block main_content %}
+    <h2>Painel de Monitoramento & Cadastro</h2>
+
+    <div class="tab-container">
+        <button class="tab-button active" onclick="openTab('tab-tx')">📡 TRANSPORTE (TX)</button>
+        <button class="tab-button" onclick="openTab('tab-dados')">💻 DADOS / IP (BBIP)</button>
+    </div>
+
+    <div id="tab-tx" class="tab-content active">
+        <p>Preencha os dados dos elementos, alarmes e informações gerais para gerar o relatório.</p>
+
+        <form method="POST" action="{{ url_for('index') }}">
+            
+            <h3>Rascunho:</h3>
+            <p class="small-text">Use este espaço para notas rápidas. Não será salvo na base de dados, apenas repassado para o relatório final.</p>
+            <textarea id="rascunho_texto" name="rascunho_texto" rows="6">{{ prev_data.rascunho_texto | default('') }}</textarea>
+
+            <h3>Dados do Alarme (Elemento 1):</h3>
+            <label for="tipo_alarme1_id_select">Selecione um Tipo de Alarme existente:</label>
+            <select id="tipo_alarme1_id_select" name="tipo_alarme1_id_select">
+                <option value="">Selecione um Tipo de Alarme</option>
+                {% for tipo_alarme in tipos_alarmes %}
+                    <option value="{{ tipo_alarme.id }}" 
+                            {% if prev_data.tipo_alarme1_id_select is defined and prev_data.tipo_alarme1_id_select|string == tipo_alarme.id|string %}selected{% endif %}>
+                        {{ tipo_alarme.nome_tipo_alarme }} (Equipe: {{ tipo_alarme.equipe_responsavel }})
+                    </option>
+                {% endfor %}
+            </select>
+            <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo tipo de alarme:</p>
+            <div class="autocomplete-container">
+                <input type="text" id="novo_tipo_alarme1_nome" name="novo_tipo_alarme1_nome" value="{{ prev_data.novo_tipo_alarme1_nome | default('') }}" autocomplete="off">
+                <div class="autocomplete-suggestions" id="suggestionsAlarme1"></div>
+            </div>
+            <p class="small-text">Se digitar um nome, ele será priorizado e criado se não existir.</p>
+
+            <h3>Dados dos Elementos:</h3>
+            <label for="nome_elemento1">Nome do Elemento 1:</label>
+            <div class="autocomplete-container">
+                <input type="text" id="nome_elemento1" name="nome_elemento1" required value="{{ prev_data.nome_elemento1 | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+                <div class="autocomplete-suggestions" id="suggestions1"></div>
+            </div>
+            
+            <label for="nome_elemento2">Nome do Elemento Vizinho:</label>
+            <div class="autocomplete-container">
+                <input type="text" id="nome_elemento2" name="nome_elemento2" required value="{{ prev_data.nome_elemento2 | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+                <div class="autocomplete-suggestions" id="suggestions2"></div>
+            </div>
+
+            <label for="gerencia_id_comum">Gerência dos Elementos:</label>
+            <select id="gerencia_id_comum" name="gerencia_id_comum" required>
+                <option value="">Selecione uma Gerência</option>
+                {% for gerencia in gerencias %}
+                    <option value="{{ gerencia.id }}" 
+                            {% if prev_data.gerencia_id_comum is defined and prev_data.gerencia_id_comum|string == gerencia.id|string %}selected{% endif %}>
+                        {{ gerencia.nome_gerencia }}
+                    </option>
+                {% endfor %}
+            </select>
+            <p class="small-text">A gerência será a mesma para ambos os elementos. Preenchida automaticamente se o elemento já existir.</p>
+
+            <label for="anel_id_select">Anel (listará anéis do Elemento 1):</label>
+            <select id="anel_id_select" name="anel_id_select">
+                <option value="">Selecione um Anel (Opcional)</option>
+                {% for anel in aneis %}
+                    <option value="{{ anel.id }}"
+                            {% if prev_data.anel_id_select is defined and prev_data.anel_id_select|string == anel.id|string %}selected{% endif %}>
+                        {{ anel.nome_anel }}
+                    </option>
+                {% endfor %}
+            </select>
+            <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo anel:</p>
+            <div class="autocomplete-container">
+                <input type="text" id="novo_anel_nome" name="novo_anel_nome" value="{{ prev_data.novo_anel_nome | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+                <div class="autocomplete-suggestions" id="suggestionsAnel"></div>
+            </div>
+            <p class="small-text">Se digitar um nome, ele será priorizado e criado se não existir.</p>
+
+            <label for="accid_lc_comum">ACCID/LC (Opcional):</label>
+            <input type="text" id="accid_lc_comum" name="accid_lc_comum" value="{{ prev_data.accid_lc_comum | default('') }}" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+            <p class="small-text">Preenchido automaticamente se a vizinhança já existir.</p>
+
+            <label for="longa_distancia_comum">Longa Distância:
+                <input type="checkbox" id="longa_distancia_comum" name="longa_distancia_comum" {% if prev_data.longa_distancia_comum == 'on' %}checked{% endif %}> Sim
+            </label>
+            <p class="small-text">Preenchida automaticamente se o elemento já existir.</p>
+
+            <label for="swap_fibra_info">Swap de Fibra (Opcional):</label>
+            <input type="text" id="swap_fibra_info" name="swap_fibra_info" value="{{ prev_data.swap_fibra_info | default('TIM') }}" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+            <p class="small-text">O valor padrão será "TIM". Preenchido automaticamente se a vizinhança já existir.</p>
+
+            <h3>Tipos de Alarmes do Elemento Vizinho:</h3>
+            <label for="tipo_alarmes2_ids_select">Selecione um ou mais Tipos de Alarme existentes:</label>
+            <select id="tipo_alarmes2_ids_select" name="tipo_alarmes2_ids_select" multiple size="5">
+                {% if tipos_alarmes %}
+                    {% for tipo_alarme in tipos_alarmes %}
+                        <option value="{{ tipo_alarme.id }}" 
+                                {% if prev_data.tipo_alarmes2_ids_select is defined and tipo_alarme.id|string in prev_data.tipo_alarmes2_ids_select %}selected{% endif %}>
+                            {{ tipo_alarme.nome_tipo_alarme }} (Equipe: {{ tipo_alarme.equipe_responsavel }})
+                        </option>
+                    {% endfor %}
+                {% else %}
+                    <option value="">Nenhum tipo de alarme cadastrado.</option>
+                {% endif %}
+            </select>
+            <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo tipo de alarme para o vizinho:</p>
+            <div class="autocomplete-container">
+                <input type="text" id="novo_tipo_alarme2_nome" name="novo_tipo_alarme2_nome" value="{{ prev_data.novo_tipo_alarme2_nome | default('') }}" autocomplete="off">
+                <div class="autocomplete-suggestions" id="suggestionsAlarme2"></div>
+            </div>
+            <p class="small-text">Se digitar um nome, ele será adicionado aos alarmes selecionados.</p>
+            
+            <h3>Estados dos Elementos para Relatório:</h3>
+            <label for="estado_origem_id_select">Estado de Elemento 1 (Origem):</label>
+            <select id="estado_origem_id_select" name="estado_origem_id_select">
+                <option value="">Selecione um Estado (Opcional)</option>
+                {% for estado in estados_enlace %}
+                    <option value="{{ estado.id }}" 
+                            {% if prev_data.estado_origem_id_select is defined and prev_data.estado_origem_id_select|string == estado.id|string %}selected{% endif %}>
+                        {{ estado.nome_estado }}
+                    </option>
+                {% endfor %}
+            </select>
+            <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo estado de origem:</p>
+            <input type="text" id="novo_estado_origem_nome" name="novo_estado_origem_nome" value="{{ prev_data.novo_estado_origem_nome | default('') }}">
+            <p class="small-text">Preenchido automaticamente se o elemento já existir.</p>
+
+            <label for="estado_destino_id_select">Estado de Elemento 2 [Vizinho] (Destino):</label>
+            <select id="estado_destino_id_select" name="estado_destino_id_select">
+                <option value="">Selecione um Estado (Opcional)</option>
+                {% for estado in estados_enlace %}
+                    <option value="{{ estado.id }}" 
+                            {% if prev_data.estado_destino_id_select is defined and prev_data.estado_destino_id_select|string == estado.id|string %}selected{% endif %}>
+                        {{ estado.nome_estado }}
+                    </option>
+                {% endfor %}
+            </select>
+            <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo estado de destino:</p>
+            <input type="text" id="novo_estado_destino_nome" name="novo_estado_destino_nome" value="{{ prev_data.novo_estado_destino_nome | default('') }}">
+            <p class="small-text">Preenchido automaticamente se o elemento já existir.</p>
+            
+            <div id="otdr_checkbox_div" style="display: none; margin-top: 20px; border: 1px solid #ccc; padding: 10px; border-radius: 5px;">
+                <label for="teste_otdr_em_curso">
+                    <input type="checkbox" id="teste_otdr_em_curso" name="teste_otdr_em_curso" {% if prev_data.teste_otdr_em_curso == 'on' %}checked{% endif %}> 
+                    Teste OTDR em curso
+                </label>
+            </div>
+
+            <div id="otdr_km_input_div" style="display: none; margin-top: 10px;">
+                <label for="km_rompimento_otdr">KM do Rompimento (se OTDR mostra rompimento):</label>
+                <input type="text" id="km_rompimento_otdr" name="km_rompimento_otdr" value="{{ prev_data.km_rompimento_otdr | default('') }}">
+            </div>
+
+            <h3>Tipo de Título do Relatório:</h3>
+            <div class="report-type-options">
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="radio" name="report_type" value="padrao" checked> Padrão (Abertura/Rompimento)
+                </label>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="radio" name="report_type" value="atenuacao"> Atenuação
+                </label>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="radio" name="report_type" value="degradacao"> Degradação
+                </label>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="radio" name="report_type" value="link_capacidade"> Falha de Link de Capacidade
+                </label>
+            </div>
+
+            <h3>Pré-visualização do Relatório:</h3>
+            <div id="report_output" style="border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; border-radius: 8px; margin-bottom: 20px;">
+                <p>Preencha os campos para ver a pré-visualização do relatório.</p>
+            </div>
+
+            <h3>Alguma informação extra:</h3>
+            <textarea id="info_extra" name="info_extra" rows="4">{{ prev_data.info_extra | default('') }}</textarea>
+            <p class="small-text">Qualquer informação adicional relevante para o relatório.</p>
+            
+            <button type="submit">Próximo (Finalizar Relatório de Evento)</button>
+            <br><br>
+            <a href="{{ url_for('index') }}" style="background-color: #f44336; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; display: inline-block;">Reiniciar Cadastro</a>
+        </form>
+    </div>
+
+    <div id="tab-dados" class="tab-content">
+        
+        <div style="background-color: #e0f7fa; padding: 15px; border-radius: 5px; border-left: 5px solid #00acc1; margin-bottom: 20px;">
+            <h3 style="margin-top: 0; color: #006064;">Cadastro de Incidente IP/Dados</h3>
+            <p style="margin-bottom: 0;">Mapeie a rota lógica e física do circuito afetado.</p>
+        </div>
+
+        <form id="formDados"> 
+            
+            <div style="margin-bottom: 20px;">
+                <label>Observações / Rascunho:</label>
+                <textarea id="dados_observacoes" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ccc;"></textarea>
+            </div>
+
+            <div class="dados-card">
+                <h4>1. Roteadores / Equipamentos Lógicos</h4>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 300px; padding-right: 20px; border-right: 1px solid #ddd;">
+                        <h5 style="color:#555; margin-top:0;">Roteador A (Origem)</h5>
+                        
+                        <label>Hostname:</label>
+                        <div class="autocomplete-container">
+                            <input type="text" id="dados_origem_hostname" placeholder="Ex: SBO-SIL01-RT01" oninput="searchRouter(this, 'sugestao_router_a')" style="width: 100%; padding: 8px;">
+                            <div id="sugestao_router_a" class="autocomplete-suggestions" style="display:none;"></div>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <div style="flex: 1;">
+                                <label>Fabricante:</label>
+                                <select id="dados_origem_fabricante" style="width: 100%; padding: 8px;"></select>
+                            </div>
+                            <div style="flex: 1;">
+                                <label>Status:</label>
+                                <select id="dados_origem_status" style="width: 100%; padding: 8px;"></select>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 10px;">
+                            <label>Alarme Ativo:</label>
+                            <select id="dados_origem_alarme" style="width: 100%; padding: 8px;"></select>
+                        </div>
+                    </div>
+
+                    <div style="flex: 1; min-width: 300px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h5 style="color:#555; margin-top:0;">Roteador B (Destino)</h5>
+                            <div>
+                                <input type="checkbox" id="dados_tem_destino" checked onchange="toggleDestino(this)">
+                                <label for="dados_tem_destino" style="font-size: 12px;">Tem Destino?</label>
+                            </div>
+                        </div>
+                        
+                        <div id="container_destino">
+                            <label>Hostname:</label>
+                            <div class="autocomplete-container">
+                                <input type="text" id="dados_destino_hostname" placeholder="Ex: SPO-ITA01-RT02" oninput="searchRouter(this, 'sugestao_router_b')" style="width: 100%; padding: 8px;">
+                                <div id="sugestao_router_b" class="autocomplete-suggestions" style="display:none;"></div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                <div style="flex: 1;">
+                                    <label>Fabricante:</label>
+                                    <select id="dados_destino_fabricante" style="width: 100%; padding: 8px;"></select>
+                                </div>
+                                <div style="flex: 1;">
+                                    <label>Status:</label>
+                                    <select id="dados_destino_status" style="width: 100%; padding: 8px;"></select>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 10px;">
+                                <label>Alarme Ativo:</label>
+                                <select id="dados_destino_alarme" style="width: 100%; padding: 8px;"></select>
+                            </div>
+                        </div>
+                        <div id="msg_sem_destino" style="display:none; color: #888; font-style: italic; padding: 20px; text-align: center; border: 1px dashed #ccc; margin-top: 10px;">
+                            Destino Externo / Nuvem / Desconhecido
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dados-card">
+                <h4>2. Serviço & Diagnóstico</h4>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1;">
+                        <label>ACCID Dados (Circuito):</label>
+                        <input type="text" id="dados_accid" placeholder="Ex: 999123" style="width: 100%; padding: 8px;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label>Tipo de Falha:</label>
+                        <select id="dados_tipo_falha" style="width: 100%; padding: 8px;">
+                            <option value="Link Down">Link Down / Queda</option>
+                            <option value="Atenuacao">Atenuação / CRC</option>
+                            <option value="Latencia">Latência Alta</option>
+                            <option value="Packet Loss">Perda de Pacotes</option>
+                            <option value="BGP Flap">BGP Flap</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dados-card" id="card_rota_fisica">
+                <h4>3. Rota Física (Elementos TX Utilizados)</h4>
+                <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Adicione os elementos de transmissão por onde este circuito passa, em ordem cronológica.</p>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <div class="autocomplete-container" style="flex: 1;">
+                        <input type="text" id="input_hop_tx" placeholder="Digite o nome do elemento TX..." oninput="searchTXElement(this)" style="width: 100%; padding: 8px;">
+                        <div id="sugestao_tx_hop" class="autocomplete-suggestions" style="display:none;"></div>
+                    </div>
+                    <button type="button" style="background: #28a745; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px;" onclick="addHop()">+ Adicionar Salto</button>
+                </div>
+
+                <ul id="lista_hops" class="hop-list">
+                    <li style="padding: 15px; color: #aaa; text-align: center;" id="hop_empty_msg">Nenhum salto adicionado.</li>
+                </ul>
+            </div>
+
+            <div class="dados-card">
+                <h4>Pré-visualização do Relatório:</h4>
+                <div id="dados_report_preview" class="report-preview">
+                    Preencha os campos acima para gerar o relatório...
+                </div>
+            </div>
+
+            <button type="button" style="background: #17a2b8; color: white; border: none; padding: 15px; font-size: 18px; width: 100%; cursor: pointer; border-radius: 5px; font-weight: bold;" onclick="submitDadosForm()">💾 Salvar Incidente de Dados</button>
+
+        </form>
+    </div>
+{% endblock %}

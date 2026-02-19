@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Tipos de Alarmes{% endblock %}
+
+{% block main_content %}
+    
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Catálogo de Alarmes (TX)</h2>
+        <a href="{{ url_for('cadastrar_ou_editar_tipo_alarme') }}" class="button" style="background-color: #2196F3; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+            + Novo Tipo (TX)
+        </a>
+    </div>
+
+    {% if tipos_alarmes %}
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+                <tr style="background-color: #f1f1f1; border-bottom: 2px solid #ccc;">
+                    <th style="padding: 10px; text-align: left;">ID</th>
+                    <th style="padding: 10px; text-align: left;">Nome do Tipo de Alarme</th>
+                    <th style="padding: 10px; text-align: left;">Alarme Pai</th> 
+                    <th style="padding: 10px; text-align: left;">Equipe Responsável</th>
+                    <th style="padding: 10px; text-align: center;">Indica Abertura?</th>
+                    <th style="padding: 10px; text-align: center;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tipo in tipos_alarmes %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">{{ tipo.id }}</td>
+                        <td style="padding: 10px; font-weight: bold;">{{ tipo.nome_tipo_alarme }}</td>
+                        <td style="padding: 10px;">{{ tipo.nome_pai if tipo.nome_pai else 'N/A' }}</td> 
+                        <td style="padding: 10px;">{{ tipo.equipe_responsavel if tipo.equipe_responsavel else 'N/A' }}</td>
+                        <td style="padding: 10px; text-align: center;">
+                            {% if tipo.eh_abertura_enlace_trigger %}
+                                <span style="color:red; font-weight:bold;">Sim</span>
+                            {% else %}
+                                <span style="color:#aaa;">Não</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            <a href="{{ url_for('cadastrar_ou_editar_tipo_alarme', tipo_alarme_id=tipo.id) }}" class="button small-button" style="padding: 5px 10px; font-size: 12px;">Editar</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: #666; font-style: italic;">Nenhum tipo de alarme TX cadastrado ainda.</p>
+    {% endif %}
+
+    <div style="margin: 40px 0; border-top: 2px dashed #ccc;"></div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="color: #006064;">Catálogo de Alarmes de DADOS (BBIP)</h2>
+        <a href="{{ url_for('cadastrar_ou_editar_tipo_alarme') }}" class="button" style="background-color: #00acc1; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+            + Gerenciar Catálogo
+        </a>
+    </div>
+    
+    <p style="color: #006064; font-size: 0.9em; margin-bottom: 15px;">Falhas lógicas e de roteamento (BGP, OSPF, Interface, etc).</p>
+
+    {% if alarmes_dados %}
+        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+                <tr style="background-color: #e0f7fa; border-bottom: 2px solid #b2ebf2;">
+                    <th style="padding: 10px; text-align: left; width: 10%; color: #006064;">ID</th>
+                    <th style="padding: 10px; text-align: left; color: #006064;">Nome do Alarme (Dados)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alarme in alarmes_dados %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">{{ alarme.id }}</td>
+                        <td style="padding: 10px; font-weight: bold; color: #333;">{{ alarme.nome_alarme }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="color: #666; font-style: italic; background: #f9f9f9; padding: 10px; border-radius: 4px;">
+            Nenhum alarme de dados cadastrado no catálogo.
+        </p>
+    {% endif %}
+
+{% endblock %}

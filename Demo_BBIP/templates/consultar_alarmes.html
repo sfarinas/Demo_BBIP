@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Histórico de Alarmes{% endblock %}
+
+{% block main_content %}
+    <h2>Histórico de Alarmes (TX)</h2>
+    
+    <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+        Lista cronológica de ocorrências registradas na rede de transmissão.
+    </p>
+
+    {% if alarmes %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background-color: #f1f1f1; border-bottom: 2px solid #ccc;">
+                    <th style="padding: 10px; text-align: left;">ID</th>
+                    <th style="padding: 10px; text-align: left;">Elemento</th>
+                    <th style="padding: 10px; text-align: left;">Tipo de Alarme</th>
+                    <th style="padding: 10px; text-align: left;">Data/Hora</th>
+                    <th style="padding: 10px; text-align: left;">Descrição</th>
+                    <th style="padding: 10px; text-align: left;">Alarme Pai</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alarme in alarmes %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px;">{{ alarme.id }}</td>
+                        <td style="padding: 10px;">
+                            <a href="{{ url_for('detalhes_elemento', elemento_id=alarme.elemento_id) }}" style="text-decoration: none; color: #007bff; font-weight: bold;">
+                                {{ alarme.nome_elemento }}
+                            </a>
+                        </td>
+                        <td style="padding: 10px;">{{ alarme.nome_tipo_alarme }}</td>
+                        <td style="padding: 10px;">{{ alarme.data_hora }}</td>
+                        <td style="padding: 10px;">{{ alarme.descricao if alarme.descricao else 'N/A' }}</td>
+                        <td style="padding: 10px;">
+                            {% if alarme.alarme_pai_id %}
+                                <span style="color: #666;">{{ alarme.nome_alarme_pai }}</span>
+                            {% else %}
+                                <span style="color: #aaa;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="font-style: italic; color: #777; background: #f9f9f9; padding: 15px; border-radius: 5px;">
+            Nenhum alarme registrado no histórico ainda.
+        </p>
+    {% endif %}
+
+{% endblock %}

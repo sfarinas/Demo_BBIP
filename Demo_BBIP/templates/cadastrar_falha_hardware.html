@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Falha de Hardware{% endblock %}
+
+{% block scripts_extra %}
+<style>
+    /* Estilos para a funcionalidade de autocomplete */
+    .autocomplete-container {
+        position: relative;
+    }
+    .autocomplete-suggestions {
+        position: absolute;
+        border: 1px solid #ddd;
+        border-top: none;
+        z-index: 99;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: white;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .autocomplete-suggestion-item {
+        padding: 10px;
+        cursor: pointer;
+    }
+    .autocomplete-suggestion-item:hover {
+        background-color: #e9e9e9;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- SELEÇÃO DE ELEMENTOS DO FORMULÁRIO ---
+        const nomeElementoInput = document.getElementById('nome_elemento');
+        const suggestionsDiv = document.getElementById('suggestions_elemento'); // Div de sugestões
+        const gerenciaSelect = document.getElementById('gerencia_id');
+        const anelSelect = document.getElementById('anel_id_select');
+        const novoAnelInput = document.getElementById('novo_anel_nome');
+        const estadoAtualSelect = document.getElementById('estado_atual_id_select');
+        const novoEstadoAtualInput = document.getElementById('novo_estado_atual_nome');
+        const tipoAlarmeSelect = document.getElementById('tipo_alarme_id_select');
+        const novoTipoAlarmeInput = document.getElementById('novo_tipo_alarme_nome');
+        const rascunhoTextoInput = document.getElementById('rascunho_texto');
+        const reportOutputDiv = document.getElementById('report_output');
+
+        // --- NOVA LÓGICA DE AUTOCOMPLETE PARA O ELEMENTO ---
+        function setupAutocompleteElemento(inputElement, suggestionsDiv) {
+            inputElement.addEventListener('input', async function() {
+                const query = this.value;
+                suggestionsDiv.innerHTML = '';
+                suggestionsDiv.style.display = 'none';
+
+                if (query.length < 3) return;
+
+                const response = await fetch(`/search_elementos?q=${encodeURIComponent(query)}`);
+                const suggestions = await response.json();
+
+                if (suggestions.length > 0) {
+                    suggestionsDiv.style.display = 'block';
+                    suggestions.forEach(item => {
+                        const div = document.createElement('div');
+                        div.textContent = item.nome_elemento;
+                        div.classList.add('autocomplete-suggestion-item');
+                        div.addEventListener('click', function() {
+                            inputElement.value = item.nome_elemento;
+                            suggestionsDiv.innerHTML = '';
+                            suggestionsDiv.style.display = 'none';
+
+                            // Dispara o evento 'change' para acionar a busca de detalhes
+                            inputElement.dispatchEvent(new Event('change'));
+                        });
+                        suggestionsDiv.appendChild(div);
+                    });
+                }
+            });
+
+            // Esconde as sugestões se o usuário clicar fora
+            document.addEventListener('click', function(e) {
+                if (e.target !== inputElement) {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+        }
+        
+        // As funções de preenchimento e lógicas que já existiam continuam aqui
+        async function fetchElementDetailsAndFill(elementName) {
+            if (!elementName) {
+                gerenciaSelect.value = '';
+                anelSelect.value = '';
+                novoAnelInput.value = '';
+                estadoAtualSelect.value = '';
+                novoEstadoAtualInput.value = '';
+                return;
+            }
+            try {
+                const response = await fetch(window.location.origin + '/get_element_details', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ element_name: elementName }),
+                });
+                const data = await response.json();
+                if (data.success && data.element) {
+                    const element = data.element;
+                    gerenciaSelect.value = element.gerencia_id || '';
+                    if (element.aneis_ids && element.aneis_ids.length > 0) {
+                        const firstAnelId = element.aneis_ids[0];
+                        if (anelSelect.querySelector(`option[value="${firstAnelId}"]`)) {
+                            anelSelect.value = firstAnelId;
+                            novoAnelInput.value = '';
+                        }
+                    } else {
+                        anelSelect.value = '';
+                    }
+                    if (element.estado_atual_id) {
+                         updateDualInputState(estadoAtualSelect, novoEstadoAtualInput, element.estado_atual_id);
+                    } else {
+                        estadoAtualSelect.value = '';
+                        novoEstadoAtualInput.value = '';
+                    }
+                } else {
+                    gerenciaSelect.value = '';
+                    anelSelect.value = '';
+                    novoAnelInput.value = '';
+                    estadoAtualSelect.value = '';
+                    novoEstadoAtualInput.value = '';
+                }
+            } catch (error) {
+                console.error(`Erro ao buscar detalhes do elemento ${elementName}:`, error);
+            } finally {
+                updateReportOutput();
+            }
+        }
+
+        function setupDualInput(selectElement, newInputElement, validationRequired = false) {
+            const updateRequired = () => {
+                if (validationRequired) {
+                    if (newInputElement.value.trim() !== '' || selectElement.value !== '') {
+                        selectElement.removeAttribute('required');
+                        newInputElement.removeAttribute('required');
+                    } else {
+                        selectElement.setAttribute('required', 'required');
+                    }
+                }
+            };
+            newInputElement.addEventListener('input', function() {
+                if (this.value.trim() !== '') selectElement.value = '';
+                updateRequired();
+            });
+            selectElement.addEventListener('change', function() {
+                if (this.value !== '') newInputElement.value = '';
+                updateRequired();
+            });
+            updateRequired();
+        }
+        
+        function updateDualInputState(selectElement, newInputElement, valueToSet) {
+            if (valueToSet) {
+                let found = false;
+                if (!isNaN(valueToSet) && selectElement.querySelector(`option[value="${valueToSet}"]`)) {
+                    selectElement.value = valueToSet;
+                    found = true;
+                } else {
+                    const optionText = String(valueToSet).trim(); 
+                    Array.from(selectElement.options).forEach(option => {
+                        if (option.text.trim().toUpperCase() === optionText.toUpperCase()) {
+                            selectElement.value = option.value;
+                            found = true;
+                        }
+                    });
+                }
+                if (found) {
+                    newInputElement.value = '';
+                } else {
+                    newInputElement.value = String(valueToSet).trim();
+                    selectElement.value = '';
+                }
+            } else {
+                selectElement.value = '';
+                newInputElement.value = '';
+            }
+        }
+
+        function updateReportOutput() {
+            const nomeElemento = nomeElementoInput.value.trim();
+            const tipoAlarmeNome = tipoAlarmeSelect.options[tipoAlarmeSelect.selectedIndex]?.text.trim() || novoTipoAlarmeInput.value.trim() || '[Tipo Alarme]';
+            const rascunho = rascunhoTextoInput.value.trim();
+            let reportTitle = "";
+            let reportDescription = [];
+
+            if (nomeElemento && tipoAlarmeNome !== '[Tipo Alarme]') {
+                reportTitle = `Falha de Hardware - ${nomeElemento} - Alarme ${tipoAlarmeNome}`;
+            } else {
+                reportTitle = "Título do Relatório (preencha os campos acima)";
+            }
+            const estadoNome = estadoAtualSelect.options[estadoAtualSelect.selectedIndex]?.text.trim() || novoEstadoAtualInput.value.trim() || '[Estado não informado]';
+            const anelNome = anelSelect.options[anelSelect.selectedIndex]?.text.trim() || novoAnelInput.value.trim() || '[Anel não informado]';
+            reportDescription.push(`Solicito apoio técnico para aferir Alarme "${tipoAlarmeNome}" em: "${estadoNome}".`);
+            reportDescription.push(`Elemento pertence ao Anel: "${anelNome}"`);
+            if (rascunho) {
+                reportDescription.push(`\n--- Rascunho ---\n${rascunho}`);
+            }
+            reportOutputDiv.innerHTML = `<h4>Título Sugerido:</h4><p><strong>${reportTitle}</strong></p><h4>Descrição Sugerida:</h4><pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #f0f0f0; padding: 10px; border-radius: 5px;">${reportDescription.join('\n')}</pre>`;
+        }
+        
+        // --- INICIALIZAÇÃO E LISTENERS ---
+        setupAutocompleteElemento(nomeElementoInput, suggestionsDiv);
+
+        nomeElementoInput.addEventListener('change', () => fetchElementDetailsAndFill(nomeElementoInput.value.trim()));
+        const allReportInputs = [nomeElementoInput, tipoAlarmeSelect, novoTipoAlarmeInput, rascunhoTextoInput, anelSelect, novoAnelInput, estadoAtualSelect, novoEstadoAtualInput];
+        allReportInputs.forEach(input => {
+            input.addEventListener('input', updateReportOutput);
+            input.addEventListener('change', updateReportOutput);
+        });
+
+        setupDualInput(anelSelect, novoAnelInput);
+        setupDualInput(estadoAtualSelect, novoEstadoAtualInput);
+        setupDualInput(tipoAlarmeSelect, novoTipoAlarmeInput, true);
+
+        if (nomeElementoInput.value.trim() !== '') {
+            fetchElementDetailsAndFill(nomeElementoInput.value.trim());
+        }
+        updateDualInputState(estadoAtualSelect, novoEstadoAtualInput, "{{ prev_data.estado_atual_id_select | default('') }}" || "{{ prev_data.novo_estado_atual_nome | default('') }}");
+        updateDualInputState(tipoAlarmeSelect, novoTipoAlarmeInput, "{{ prev_data.tipo_alarme_id_select | default('') }}" || "{{ prev_data.novo_tipo_alarme_nome | default('') }}");
+        
+        setTimeout(updateReportOutput, 100);
+    });
+</script>
+{% endblock %}
+
+{% block main_content %}
+    <h2>Cadastro de Falha de Hardware</h2>
+    <p>Use este formulário para registrar um evento de <strong>Falha de Hardware</strong>. Todos os alarmes criados aqui serão automaticamente associados à equipe <strong>FMMT (Hardware)</strong>.</p>
+
+    <form method="POST">
+        <h3>Rascunho:</h3>
+        <p class="small-text">Use este espaço para notas rápidas. Não será salvo na base de dados, apenas repassado para o relatório final.</p>
+        <textarea id="rascunho_texto" name="rascunho_texto" rows="6">{{ prev_data.rascunho_texto | default('') }}</textarea>
+
+        <h3>Dados do Alarme (Equipe FMMT):</h3>
+        <label for="tipo_alarme_id_select">Selecione um Tipo de Alarme existente (Filtrado por FMMT):</label>
+        <select id="tipo_alarme_id_select" name="tipo_alarme_id_select" >
+            <option value="">Selecione um Tipo de Alarme</option>
+            {% for tipo_alarme in tipos_alarmes_fmmt %}
+                <option value="{{ tipo_alarme.id }}" 
+                        {% if prev_data.tipo_alarme_id_select is defined and prev_data.tipo_alarme_id_select|string == tipo_alarme.id|string %}selected{% endif %}>
+                    {{ tipo_alarme.nome_tipo_alarme }}
+                </option>
+            {% endfor %}
+        </select>
+        <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo tipo de alarme (será criado na equipe FMMT):</p>
+        <input type="text" id="novo_tipo_alarme_nome" name="novo_tipo_alarme_nome" value="{{ prev_data.novo_tipo_alarme_nome | default('') }}">
+        
+        <h3>Dados do Elemento:</h3>
+        <label for="nome_elemento">Nome do Elemento:</label>
+        <div class="autocomplete-container">
+            <input type="text" id="nome_elemento" name="nome_elemento" required value="{{ prev_data.nome_elemento | default('') }}" autocomplete="off" pattern="[^:<>"]*" title="O nome não pode conter os caracteres : < > &quot;">
+            <div class="autocomplete-suggestions" id="suggestions_elemento"></div>
+        </div>
+        <p class="small-text">Comece a digitar para ver sugestões. Ao selecionar um nome existente, os outros campos serão pré-preenchidos.</p>
+
+        <label for="gerencia_id">Gerência do Elemento:</label>
+        <select id="gerencia_id" name="gerencia_id" required>
+            <option value="">Selecione uma Gerência</option>
+            {% for gerencia in gerencias %}
+                <option value="{{ gerencia.id }}" 
+                        {% if prev_data.gerencia_id is defined and prev_data.gerencia_id|string == gerencia.id|string %}selected{% endif %}>
+                    {{ gerencia.nome_gerencia }}
+                </option>
+            {% endfor %}
+        </select>
+        
+        <label for="anel_id_select">Anel do Elemento:</label>
+        <select id="anel_id_select" name="anel_id_select">
+            <option value="">Selecione um Anel</option>
+            {% for anel in aneis %}
+                <option value="{{ anel.id }}"
+                        {% if prev_data.anel_id_select is defined and prev_data.anel_id_select|string == anel.id|string %}selected{% endif %}>
+                    {{ anel.nome_anel }}
+                </option>
+            {% endfor %}
+        </select>
+        <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo anel:</p>
+        <input type="text" id="novo_anel_nome" name="novo_anel_nome" value="{{ prev_data.novo_anel_nome | default('') }}">
+
+        <label for="estado_atual_id_select">Estado Atual do Elemento:</label>
+        <select id="estado_atual_id_select" name="estado_atual_id_select">
+            <option value="">Selecione um Estado (Opcional)</option>
+            {% for estado in estados_enlace %}
+                <option value="{{ estado.id }}" 
+                        {% if prev_data.estado_atual_id_select is defined and prev_data.estado_atual_id_select|string == estado.id|string %}selected{% endif %}>
+                    {{ estado.nome_estado }}
+                </option>
+            {% endfor %}
+        </select>
+        <p style="margin-top: 10px; margin-bottom: 5px;">Ou digite um nome para criar um novo estado:</p>
+        <input type="text" id="novo_estado_atual_nome" name="novo_estado_atual_nome" value="{{ prev_data.novo_estado_atual_nome | default('') }}">
+
+        <h3>Pré-visualização do Relatório:</h3>
+        <div id="report_output" style="border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; border-radius: 8px; margin-bottom: 20px;">
+            <p>Preencha os campos para ver a pré-visualização do relatório.</p>
+        </div>
+        
+        <button type="submit">Cadastrar Falha de Hardware</button>
+        <br><br>
+        <a href="{{ url_for('cadastrar_falha_hardware') }}" style="background-color: #f44336; color: white; padding: 10px 15px; border-radius: 5px; text-decoration: none; display: inline-block;">Limpar Formulário</a>
+    </form>
+{% endblock %}

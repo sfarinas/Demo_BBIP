@@ -1,0 +1,681 @@
+{% extends "base.html" %}
+
+{% block title %}Visualização de Enlaces de Rede{% endblock %}
+
+{% block main_content %}
+    <style>
+        /* --- ESTILOS GERAIS --- */
+        body { margin: 0; padding: 0; overflow-x: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        .controle-diagrama {
+            background: #f5f5f5;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Container do Databook Switch */
+        .databook-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background-color: #e0e0e0;
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            margin-left: auto; /* Empurra para direita */
+        }
+        
+        /* Switch Databook */
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #9c27b0; }
+        input:focus + .slider { box-shadow: 0 0 1px #9c27b0; }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Estilo do Dropdown de Anéis */
+        .anel-select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #999;
+            background: #fff;
+            color: #333;
+            font-size: 14px;
+            width: 350px;
+            font-weight: bold;
+        }
+
+        /* --- CABEÇALHO TÉCNICO (DATABOOK) --- */
+        #databook_header {
+            display: none; /* Controlado via JS */
+            background-color: #111; 
+            color: #fff;
+            padding: 15px 20px;
+            border-bottom: 4px solid #9c27b0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 10;
+            position: relative;
+        }
+        
+        .db-meta-grid { display: flex; flex-wrap: wrap; gap: 15px; justify-content: space-between; }
+
+        .db-meta-item {
+            background-color: #2a2a2a;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border-left: 3px solid #00e676;
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .db-label { color: #aaa; font-size: 0.75em; text-transform: uppercase; display: block; margin-bottom: 3px; }
+        .db-value { font-weight: 600; color: #fff; font-size: 1.05em; }
+
+        /* Container do Diagrama */
+        #network-diagram-container {
+            border: 1px solid #ccc; 
+            background-color: #ffffff; /* Inicia Branco (Databook) */
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+        
+        /* Botões */
+        button { cursor: pointer; padding: 6px 12px; border: 1px solid #999; background: #eee; border-radius: 4px; }
+        button:hover { background: #ddd; }
+        
+        .search-area { display: flex; align-items: center; gap: 5px; margin-left: 15px; padding-left: 15px; border-left: 1px solid #ccc; }
+
+        /* Tooltips personalizados */
+        div.vis-tooltip {
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            font-family: 'Segoe UI', sans-serif;
+            z-index: 9999; 
+        }
+        
+        /* Caixa base para o Tooltip gerado pelo Python */
+        .custom-tooltip-python {
+            background-color: #f9f9f9;
+            color: #333;
+            border: 1px solid #9c27b0;
+            box-shadow: 4px 4px 15px rgba(0,0,0,0.3);
+            border-radius: 6px;
+            padding: 10px;
+            max-width: 500px;
+            font-size: 12px;
+        }
+
+        /* --- PAINEL LATERAL (SIDE PANEL) --- */
+        #side-panel {
+            position: fixed;
+            top: 150px; 
+            right: -450px; 
+            width: 400px;
+            height: calc(100vh - 160px);
+            background-color: #fff;
+            border-left: 5px solid #9c27b0;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.2);
+            transition: right 0.3s ease-in-out; 
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #side-panel.open { right: 0; }
+
+        .sp-header {
+            background: #333;
+            color: #fff;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        .sp-close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .sp-close-btn:hover { color: #ff5555; }
+
+        .sp-content {
+            padding: 15px;
+            overflow-y: auto;
+            flex: 1;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 13px; 
+        }
+
+        .sp-content .custom-tooltip-python {
+            box-shadow: none; border: none; padding: 0; max-width: 100%;
+        }
+
+        /* --- NOVO: ESTILO DA TABELA DATABOOK (RODAPÉ) --- */
+        #databook-table-area {
+            display: none; /* Só aparece no modo Databook */
+            padding: 20px;
+            background: #fff;
+            border-top: 1px solid #ddd;
+            margin-top: 20px;
+        }
+
+        .databook-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'Segoe UI', sans-serif;
+            border: 2px solid #0277bd; /* Borda azul estilo TIM/Embratel */
+        }
+
+        .databook-table th {
+            background-color: #0277bd;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            text-transform: uppercase;
+            border: 1px solid #01579b;
+        }
+
+        .databook-table td {
+            padding: 8px;
+            border: 1px solid #ccc;
+            color: #333;
+        }
+
+        .databook-table tr:nth-child(even) { background-color: #f2f2f2; }
+        .databook-table tr:hover { background-color: #e1f5fe; }
+
+    </style>
+
+    <h2>Diagrama de Enlaces de Rede</h2>
+
+    <div class="controle-diagrama">
+        <div style="display: flex; flex-direction: column;">
+            <label style="font-size: 10px; font-weight: bold; color: #666;">SELECIONE A SEÇÃO / ANEL:</label>
+            <div style="display: flex; gap: 5px;">
+                <select id="anel_selector" class="anel-select">
+                    <option value="">-- Carregando... --</option>
+                </select>
+                <button id="btn-reload-list" title="Recarregar Lista">🔄</button>
+            </div>
+        </div>
+
+        <div class="search-area">
+            <input type="text" id="search-input" placeholder="Buscar Elemento..." style="width: 200px; padding: 6px;">
+            <button id="search-btn">🔍</button>
+            <button id="clear-search-btn">❌</button>
+        </div>
+
+        <div style="margin-left: 15px;">
+            <input type="number" id="altura-canvas" value="800" min="400" max="2000" step="50" style="width: 50px; padding: 6px;">
+            <button id="aplicar-altura-btn">Alt</button>
+        </div>
+
+        <div class="databook-control">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label class="switch">
+                    <input type="checkbox" id="databookSwitch" checked>
+                    <span class="slider"></span>
+                </label>
+                <span style="font-weight: bold; color: #9c27b0;" id="lblDatabook">📘 Modo Engenharia</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="databook_header">
+        <div class="db-meta-grid">
+            <div class="db-meta-item">
+                <span class="db-label">SEÇÃO / ANEL</span>
+                <span class="db-value" id="hdr_anel">--</span>
+            </div>
+            <div class="db-meta-item">
+                <span class="db-label">TECNOLOGIA</span>
+                <span class="db-value" id="hdr_tec">--</span>
+            </div>
+            <div class="db-meta-item">
+                <span class="db-label">COERÊNCIA</span>
+                <span class="db-value" id="hdr_coerencia">--</span>
+            </div>
+            <div class="db-meta-item" style="border-left-color: #ff9800;">
+                <span class="db-label">SWAP INFO</span>
+                <span class="db-value" id="hdr_swap">--</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="side-panel">
+        <div class="sp-header">
+            <span>📋 DETALHES DO NÓ</span>
+            <button class="sp-close-btn" onclick="closeSidePanel()">×</button>
+        </div>
+        <div id="sp-content-area" class="sp-content">
+            <p style="color: #888; text-align: center;">Clique em um nó para ver detalhes.</p>
+        </div>
+    </div>
+
+    <div id="network-diagram-container" style="height: 800px;">
+        <p style="padding: 20px; color: #9c27b0; font-weight: bold;">Inicializando Modo Databook...</p>
+    </div>
+
+    <div id="databook-table-area">
+        <h3 style="color: #0277bd; border-bottom: 2px solid #0277bd; display: inline-block; margin-bottom: 10px;">📑 Detalhamento da Seção (Ordem Visual)</h3>
+        <div id="table-container">
+            </div>
+    </div>
+
+{% endblock %}
+
+{% block scripts_extra %}
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script type="text/javascript">
+        
+        let network = null;
+        let isDatabookMode = true; 
+        
+        const originalNodesData = {{ nodes_data | tojson }};
+        const originalEdgesData = {{ edges_data | tojson }};
+        
+        let nodesDataSet = null;
+        let edgesDataSet = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleMode(); 
+
+            document.getElementById('databookSwitch').addEventListener('change', toggleMode);
+            document.getElementById('anel_selector').addEventListener('change', handleAnelSelection);
+            document.getElementById('btn-reload-list').addEventListener('click', loadAneisList);
+            document.getElementById('search-btn').addEventListener('click', handleTextSearch);
+            document.getElementById('search-input').addEventListener('keypress', e => { if (e.key === 'Enter') handleTextSearch(); });
+            document.getElementById('clear-search-btn').addEventListener('click', resetSearch);
+            
+            document.getElementById('aplicar-altura-btn').addEventListener('click', () => {
+                const h = document.getElementById('altura-canvas').value;
+                document.getElementById('network-diagram-container').style.height = h + 'px';
+            });
+        });
+
+        // --- FUNÇÕES DO PAINEL LATERAL ---
+        function openSidePanel(htmlContent) {
+            const panel = document.getElementById('side-panel');
+            const contentArea = document.getElementById('sp-content-area');
+            contentArea.innerHTML = htmlContent;
+            panel.classList.add('open');
+        }
+
+        function closeSidePanel() {
+            document.getElementById('side-panel').classList.remove('open');
+        }
+
+        // --- LÓGICA DE INTERFACE ---
+
+        async function loadAneisList() {
+            const sel = document.getElementById('anel_selector');
+            const databookOn = document.getElementById('databookSwitch').checked;
+            sel.innerHTML = '<option value="">Carregando...</option>';
+            const searchTerm = databookOn ? 'WDM_LD' : '';
+
+            try {
+                const response = await fetch(`/api/search_anel?q=${searchTerm}`); 
+                const data = await response.json();
+                sel.innerHTML = '<option value="">-- Selecione uma Seção/Anel --</option>';
+                data.forEach(anel => {
+                    const opt = document.createElement('option');
+                    opt.value = anel.id; opt.innerText = anel.nome_anel;
+                    sel.appendChild(opt);
+                });
+            } catch(e) { console.error(e); sel.innerHTML = '<option value="">Erro ao carregar lista</option>'; }
+        }
+
+        function toggleMode() {
+            isDatabookMode = document.getElementById('databookSwitch').checked;
+            const lbl = document.getElementById('lblDatabook');
+            const header = document.getElementById('databook_header');
+            const container = document.getElementById('network-diagram-container');
+            const searchInput = document.getElementById('search-input');
+            
+            // Controle da Tabela
+            const tableArea = document.getElementById('databook-table-area');
+
+            loadAneisList();
+            closeSidePanel(); 
+
+            if (isDatabookMode) {
+                lbl.style.color = "#9c27b0";
+                header.style.display = 'block';
+                tableArea.style.display = 'block'; // MOSTRA A TABELA NO MODO DATABOOK
+                container.style.backgroundColor = '#ffffff';
+                searchInput.placeholder = "Busca textual desativada";
+                
+                if(network) network.destroy();
+                container.innerHTML = '<div style="height:100%; display:flex; justify-content:center; align-items:center; color:#9c27b0; font-weight:bold;">Selecione um Anel LD no menu acima.</div>';
+                document.getElementById('table-container').innerHTML = ""; // Limpa a tabela
+                document.getElementById('anel_selector').value = "";
+            } else {
+                lbl.style.color = "#555";
+                header.style.display = 'none';
+                tableArea.style.display = 'none'; // ESCONDE A TABELA NO MODO NORMAL
+                container.style.backgroundColor = '#1a1a1a';
+                searchInput.placeholder = "Buscar Elemento (Nome, IP...)";
+                
+                drawTopologyMode();
+            }
+        }
+
+        function handleAnelSelection() {
+            const sel = document.getElementById('anel_selector');
+            const anelId = sel.value;
+            const anelNome = sel.options[sel.selectedIndex]?.text;
+            if (!anelId) return; 
+
+            closeSidePanel(); 
+
+            if (isDatabookMode) {
+                fetchAndDrawDatabook(anelId, anelNome);
+            } else {
+                searchLocalTopology(anelNome, true);
+            }
+        }
+
+        function handleTextSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return;
+            if (isDatabookMode) { alert("No modo Databook, use o seletor de Anéis."); } 
+            else { searchLocalTopology(query, false); }
+        }
+
+        function resetSearch() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('anel_selector').value = '';
+            closeSidePanel();
+            if(!isDatabookMode && network) { network.unselectAll(); network.fit(); }
+        }
+
+        // --- EVENTOS DO DIAGRAMA E PAINEL INTELIGENTE ---
+        function setupNetworkEvents(netInstance, nodesData) {
+            netInstance.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const node = nodesData.get(nodeId);
+                    
+                    if (isDatabookMode) {
+                        // MODO TÉCNICO (Visualização e Leitura)
+                        document.getElementById('sp-content-area').innerHTML = "<p>Carregando dados...</p>";
+                        openSidePanel("");
+
+                        fetch(`/api/debug/databook/get_node_details/${nodeId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if(data.success) {
+                                    // 1. MONTA O FORMULÁRIO DE DADOS (Somente Leitura)
+                                    let formHtml = `
+                                        <div style="display:flex; flex-direction:column; gap:10px;">
+                                            <div style="background:#eee; padding:5px; border-radius:4px; font-weight:bold; font-size:12px;">
+                                                ID: ${data.id} <br> ${data.nome_elemento}
+                                            </div>
+                                            <label style="font-size:11px; font-weight:bold;">Site ID (Ex: SPO_001):</label>
+                                            <input type="text" value="${data.site_id}" style="padding:5px; border:1px solid #ccc; width:100%; background:#f0f0f0;" disabled>
+                                            <div style="display:flex; gap:5px;">
+                                                <div style="flex:3;">
+                                                    <label style="font-size:11px; font-weight:bold;">Cidade:</label>
+                                                    <input type="text" value="${data.cidade}" style="padding:5px; border:1px solid #ccc; width:100%; background:#f0f0f0;" disabled>
+                                                </div>
+                                                <div style="flex:1;">
+                                                    <label style="font-size:11px; font-weight:bold;">UF:</label>
+                                                    <input type="text" value="${data.uf}" style="padding:5px; border:1px solid #ccc; width:100%; background:#f0f0f0;" disabled>
+                                                </div>
+                                            </div>
+                                            <label style="font-size:11px; font-weight:bold;">Endereço Físico:</label>
+                                            <textarea rows="3" style="padding:5px; border:1px solid #ccc; width:100%; font-family:sans-serif; background:#f0f0f0;" disabled>${data.endereco}</textarea>
+                                            
+                                            <label style="font-size:11px; font-weight:bold;">Detentor (Proprietário):</label>
+                                            <input type="text" value="${data.detentor || ''}" style="padding:5px; border:1px solid #ccc; width:100%; background:#f0f0f0;" disabled>
+
+                                            <div style="text-align:center; padding:10px; color:#999; font-size:11px; border-top:1px dashed #ccc; margin-top:10px;">
+                                                🔒 Modo Visualização (Somente Leitura)
+                                            </div>
+                                        </div>
+                                    `;
+
+                                    // 2. INJETA OS DETALHES TÉCNICOS (CONEXÕES)
+                                    // Verifica se o Python mandou o HTML de conexões (Opção A)
+                                    if (node.html_tecnico) {
+                                        formHtml += `
+                                            <div style="margin-top:15px; border-top: 3px solid #2196F3; padding-top:10px;">
+                                                <label style="font-size:12px; font-weight:bold; color:#2196F3; margin-bottom:8px; display:block;">
+                                                    🔗 ESTRUTURA LÓGICA & CONEXÕES:
+                                                </label>
+                                                ${node.html_tecnico}
+                                            </div>
+                                        `;
+                                    }
+
+                                    document.getElementById('sp-content-area').innerHTML = formHtml;
+                                } else {
+                                    document.getElementById('sp-content-area').innerHTML = "<p style='color:red'>Erro ao carregar dados.</p>";
+                                }
+                            });
+                    } else {
+                        // MODO TOPOLOGIA GERAL: Mostra Tooltip HTML Simples
+                        let htmlContent = "";
+                        if (node.title instanceof HTMLElement) {
+                            htmlContent = node.title.outerHTML; 
+                        } else if (typeof node.title === 'string') {
+                            if(!node.title.includes('custom-tooltip-python')) {
+                                htmlContent = `<div class="custom-tooltip-python">${node.title}</div>`;
+                            } else {
+                                htmlContent = node.title;
+                            }
+                        }
+                        openSidePanel(htmlContent);
+                    }
+                } else {
+                    closeSidePanel();
+                }
+            });
+        }
+
+        // A. MODO NORMAL (TOPOLOGIA)
+        function drawTopologyMode() {
+            const container = document.getElementById('network-diagram-container');
+            container.innerHTML = ""; 
+
+            nodesDataSet = new vis.DataSet(originalNodesData.map(n => {
+                if (n.title && typeof n.title === 'string' && !n.title.includes('custom-tooltip-python')) {
+                    const div = document.createElement("div");
+                    div.className = "custom-tooltip-python";
+                    div.innerHTML = n.title;
+                    n.title = div;
+                } else if (n.title && typeof n.title === 'string') {
+                    const div = document.createElement("div");
+                    div.className = "custom-tooltip-python";
+                    div.innerHTML = n.title;
+                    n.title = div;
+                }
+                return n;
+            }));
+            
+            edgesDataSet = new vis.DataSet(originalEdgesData.map(e => {
+                let newEdge = JSON.parse(JSON.stringify(e));
+                if (newEdge.title && typeof newEdge.title === 'string') {
+                    const div = document.createElement("div");
+                    div.className = "custom-tooltip-python";
+                    div.innerHTML = newEdge.title;
+                    newEdge.title = div;
+                }
+                return newEdge;
+            }));
+
+            const options = {
+                nodes: { shape: 'dot', size: 20, borderWidth: 1, font: { size: 14, color: '#ccc' }, shadow: true },
+                edges: { width: 2, color: { inherit: 'from', opacity: 0.5 }, smooth: { type: "dynamic", roundness: 0.5 } },
+                physics: { enabled: true, barnesHut: { gravitationalConstant: -3000, springConstant: 0.04, springLength: 120 }, stabilization: { iterations: 100 } },
+                interaction: { hover: true, tooltipDelay: 50, keyboard: true }
+            };
+
+            if(network) network.destroy();
+            network = new vis.Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
+            setupNetworkEvents(network, nodesDataSet);
+        }
+
+        // --- FUNÇÃO NOVA: RENDERIZAR TABELA DATABOOK ---
+        function renderDatabookTable(nodes) {
+            // 1. Ordena os nós pela posição X (Esquerda -> Direita)
+            // Se o nó não tiver X, assume 0 (início)
+            const sortedNodes = [...nodes].sort((a, b) => (a.x || 0) - (b.x || 0));
+
+            let tableHtml = `
+                <table class="databook-table">
+                    <thead>
+                        <tr>
+                            <th>UF</th>
+                            <th>Localidade</th>
+                            <th>SIGLA CNL</th>
+                            <th>END_ID</th>
+                            <th>Endereço</th>
+                            <th>Elemento ID (NE Name)</th>
+                            <th>Detentor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            sortedNodes.forEach(n => {
+                // Tenta gerar a SIGLA se não estiver explícita (3 primeiros chars do site_id)
+                let sigla = "---";
+                if(n.site_id && n.site_id.length >= 3) {
+                    sigla = n.site_id.substring(0, 3).toUpperCase();
+                }
+
+                tableHtml += `
+                    <tr>
+                        <td style="text-align:center; font-weight:bold;">${n.uf || '--'}</td>
+                        <td>${n.cidade || '--'}</td>
+                        <td style="text-align:center;">${sigla}</td>
+                        <td style="font-weight:bold;">${n.site_id || '--'}</td>
+                        <td>${n.endereco || '--'}</td>
+                        <td>${n.label || '--'}</td>
+                        <td>${n.detentor || '--'}</td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += `</tbody></table>`;
+            document.getElementById('table-container').innerHTML = tableHtml;
+        }
+
+        // B. MODO DATABOOK (SOMENTE LEITURA E AJUSTE VISUAL LOCAL)
+        async function fetchAndDrawDatabook(anelId, anelNome) {
+            const container = document.getElementById('network-diagram-container');
+            container.innerHTML = '<p style="padding:20px; color:#9c27b0;">Carregando Databook...</p>';
+
+            try {
+                const url = `/api/debug/databook/get_section/${anelId}?t=${new Date().getTime()}`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+
+                document.getElementById('hdr_anel').innerText = anelNome;
+                document.getElementById('hdr_tec').innerText = data.metadata.complemento_tecnologia || 'N/A';
+                document.getElementById('hdr_coerencia').innerText = data.metadata.coerencia || 'N/A';
+                document.getElementById('hdr_swap').innerText = data.metadata.swap_info || 'N/A';
+
+                // --- LÓGICA VISUAL: TROCA NOME POR CIDADE AQUI ---
+                const processedNodes = data.nodes.map(node => {
+                    let displayLabel = node.label;
+                    if (node.cidade && node.cidade.trim() !== "") {
+                        displayLabel = node.cidade;
+                    }
+                    return {
+                        ...node,
+                        label: displayLabel,
+                        original_name: node.label, 
+                        font: { size: 16, color: '#000', face: 'arial', strokeWidth: 2, strokeColor: '#ffffff' }
+                    };
+                });
+
+                // --- GERAÇÃO DA TABELA (NOVA CHAMADA) ---
+                renderDatabookTable(processedNodes);
+                // ----------------------------------------
+
+                nodesDataSet = new vis.DataSet(processedNodes);
+                edgesDataSet = new vis.DataSet(data.edges);
+                
+                const options = {
+                    nodes: { font: { size: 16, color: '#000' }, borderWidth: 2, shadow: true },
+                    edges: { width: 2, color: { color: '#555' }, font: { size: 12, align: 'top', background: 'white' }, smooth: false },
+                    
+                    // CONFIGURAÇÃO DE FÍSICA E INTERAÇÃO PARA "MOVIMENTO LIVRE (SEM SALVAR)"
+                    physics: { 
+                        enabled: false, 
+                        stabilization: false 
+                    },
+                    
+                    interaction: { 
+                        hover: true, 
+                        dragNodes: true, // PERMITE ARRASTAR (Livre para o técnico ver)
+                        zoomView: true, 
+                        dragView: true 
+                    },
+
+                    // MANIPULAÇÃO DESATIVADA
+                    manipulation: {
+                        enabled: false, 
+                        initiallyActive: false, 
+                        addNode: false,     
+                        addEdge: false,
+                        editEdge: false, 
+                        deleteNode: false,
+                        deleteEdge: false
+                    }
+                };
+
+                container.innerHTML = "";
+                if(network) network.destroy();
+                network = new vis.Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
+                
+                setupNetworkEvents(network, nodesDataSet);
+
+                // --- DRAG END VAZIO (Não salva nada) ---
+                network.on("dragEnd", function (params) {
+                    // Intencionalmente vazio. 
+                });
+
+            } catch(e) { console.error(e); container.innerHTML = '<p style="color:red; padding:20px;">Erro ao carregar Databook.</p>'; }
+        }
+
+        function searchLocalTopology(query, isRingSearch) {
+            if(!network) return;
+            const normalizedQuery = query.toLowerCase().replace(/_/g, '-');
+            const matchedIds = [];
+            
+            if(!isDatabookMode) {
+                originalNodesData.forEach(n => {
+                    let content = (n.label || "") + " " + (n.site_id || "") + " " + (n.cidade || "");
+                    if(n.title && typeof n.title === 'string') { content += n.title; }
+                    else if (n.title && n.title.innerHTML) { content += n.title.innerHTML; }
+                    
+                    if(content.toLowerCase().includes(normalizedQuery)) matchedIds.push(n.id);
+                });
+
+                if (matchedIds.length > 0) {
+                    network.selectNodes(matchedIds);
+                    if(isRingSearch) { network.fit({ nodes: matchedIds, animation: true }); } 
+                    else { network.focus(matchedIds[0], { scale: 1.2, animation: true }); }
+                } else {
+                    if(!isRingSearch) alert('Elemento não encontrado: ' + query);
+                }
+            }
+        }
+
+    </script>
+{% endblock %}

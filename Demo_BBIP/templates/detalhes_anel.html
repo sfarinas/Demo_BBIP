@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Anel: {{ anel.nome_anel }}{% endblock %}
+
+{% block main_content %}
+    <h2>Elementos no Anel: {{ anel.nome_anel }}</h2>
+    <p><strong>Provedor Principal do Anel:</strong> {{ provedor_nome or 'Não definido' }}</p>
+    {% if elementos_no_anel %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome do Elemento</th>
+                <th>Gerência</th>
+                <th>Longa Distância</th>
+                <th>ACCID/LC(s)</th> {# Título alterado para indicar múltiplos #}
+                <th>Swap de Fibra</th> {# Título alterado #}
+                <th>Ações</th> {# Adicionando coluna de Ações #}
+            </tr>
+        </thead>
+        <tbody>
+            {% for elemento in elementos_no_anel %}
+                <tr>
+                    <td>{{ elemento.id }}</td>
+                    <td><a href="{{ url_for('detalhes_elemento', elemento_id=elemento.id) }}">{{ elemento.nome_elemento }}</a></td>
+                    <td>{{ elemento.nome_gerencia }}</td>
+                    <td>{{ 'Sim' if elemento.longa_distancia else 'Não' }}</td>
+                    <td>{{ elemento.accid_lcs }}</td> {# Usando a nova chave 'accid_lcs' #}
+                    <td>{{ elemento.swap_fibras }}</td> {# Usando a nova chave 'swap_fibras' #}
+                    <td><a href="{{ url_for('detalhes_elemento', elemento_id=elemento.id) }}" class="button small-button">Detalhes</a></td> {# Botão Detalhes #}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p>Nenhum elemento associado a este anel.</p>
+    {% endif %}
+    <br>
+    <p><a href="{{ url_for('consultar_aneis') }}">Voltar para a lista de Anéis</a></p>
+{% endblock %}

@@ -1,0 +1,358 @@
+/* Estilo básico para o corpo da página */
+body {
+    font-family: 'Inter', sans-serif; /* Usando a fonte Inter, se disponível */
+    margin: 0;
+    padding: 0;
+    background-color: #f4f7f6;
+    color: #333;
+    line-height: 1.6;
+}
+
+#network-diagram {
+width: 100%;
+height: 100%;
+border: 1px solid #ccc;
+background-color: #f9f9f9;
+}
+
+/* Estilo para o cabeçalho */
+header {
+background-color: #2c3e50;
+color: #ecf0f1;
+padding: 1rem 0;
+text-align: center;
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+header h1 {
+margin: 0;
+padding: 0 1rem;
+font-size: 2.2rem;
+}
+
+/* Estilo para a barra de navegação */
+nav {
+background-color: #34495e;
+padding: 0.8rem 0;
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+nav ul {
+list-style: none;
+padding: 0;
+margin: 0;
+display: flex;
+justify-content: center;
+flex-wrap: wrap; /* Permite que os itens quebrem linha em telas pequenas */
+}
+
+nav ul li {
+margin: 0 10px;
+}
+
+nav ul li a {
+color: #ecf0f1;
+text-decoration: none;
+padding: 0.5rem 1rem;
+display: block;
+border-radius: 5px;
+transition: background-color 0.3s ease;
+}
+
+nav ul li a:hover {
+background-color: #4a6580;
+}
+
+/* Estilo para o conteúdo principal */
+main {
+padding: 20px;
+max-width: 960px;
+margin: 20px auto;
+background-color: #ffffff;
+border-radius: 8px;
+box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+main h2 {
+color: #2c3e50;
+border-bottom: 2px solid #e0e0e0;
+padding-bottom: 10px;
+margin-bottom: 20px;
+font-size: 1.8rem;
+}
+
+/* Estilo para formulários */
+form {
+display: flex;
+flex-direction: column;
+gap: 15px;
+margin-top: 20px;
+}
+
+form label {
+font-weight: bold;
+margin-bottom: 5px;
+color: #34495e;
+}
+
+form input[type="text"],
+form input[type="number"],
+form select,
+form textarea {
+padding: 10px;
+border: 1px solid #ccc;
+border-radius: 5px;
+width: 100%;
+box-sizing: border-box; /* Garante que padding e border sejam incluídos na largura */
+font-size: 1rem;
+}
+
+form button {
+background-color: #28a745; /* Cor verde para botões de sucesso */
+color: white;
+padding: 12px 20px;
+border: none;
+border-radius: 5px;
+cursor: pointer;
+font-size: 1rem;
+transition: background-color 0.3s ease;
+}
+
+form button:hover {
+background-color: #218838;
+}
+
+/* Estilo para mensagens flash (alertas) */
+.flashes {
+list-style: none;
+padding: 0;
+margin: 10px 0;
+}
+
+.flashes li {
+padding: 10px;
+border-radius: 5px;
+margin-bottom: 10px;
+font-weight: bold;
+}
+
+.flashes .success {
+background-color: #d4edda;
+color: #155724;
+border: 1px solid #c3e6cb;
+}
+
+.flashes .danger {
+background-color: #f8d7da;
+color: #721c24;
+border: 1px solid #f5c6cb;
+}
+
+/* Estilo para tabelas */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: #fdfdfd;
+    border-radius: 8px;
+    overflow: hidden; /* Garante cantos arredondados */
+}
+
+table th, table td {
+padding: 12px 15px;
+border-bottom: 1px solid #e0e0e0;
+text-align: left;
+}
+
+table th {
+background-color: #e9ecef;
+color: #495057;
+font-weight: bold;
+text-transform: uppercase;
+font-size: 0.9rem;
+}
+
+table tr:nth-child(even) {
+background-color: #f8f8f8;
+}
+
+table tr:hover {
+background-color: #f1f1f1;
+}
+
+/* Estilo para links em tabelas */
+table td a {
+color: #007bff;
+text-decoration: none;
+}
+
+table td a:hover {
+text-decoration: underline;
+}
+
+/* Estilo para listas genéricas no conteúdo */
+ul.content-list {
+list-style: disc;
+margin-left: 20px;
+padding: 0;
+}
+
+ul.content-list li {
+margin-bottom: 5px;
+}
+
+/* Estilo para o rodapé */
+footer {
+text-align: center;
+padding: 20px;
+margin-top: 30px;
+background-color: #2c3e50;
+color: #ecf0f1;
+font-size: 0.9rem;
+box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo para múltiplos selects (para Eventos) */
+select[multiple] {
+min-height: 120px; /* Altura mínima para mostrar várias opções */
+}
+
+/* NOVO: Estilos para os controles do diagrama */
+.controle-diagrama {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 20px;
+background-color: #f0f0f0;
+padding: 15px;
+border-radius: 8px;
+border: 1px solid #ddd;
+}
+
+.controle-diagrama label {
+font-weight: bold;
+color: #444;
+}
+
+.controle-diagrama input[type="number"] {
+width: 100px;
+padding: 8px;
+border: 1px solid #ccc;
+border-radius: 5px;
+}
+
+.controle-diagrama button {
+background-color: #28a745;
+color: white;
+border: none;
+padding: 8px 15px;
+border-radius: 5px;
+cursor: pointer;
+font-size: 1rem;
+transition: background-color 0.3s ease;
+}
+
+.controle-diagrama button:hover {
+background-color: #218838;
+}
+
+/* Responsividade básica */
+@media (max-width: 768px) {
+nav ul {
+flex-direction: column;
+align-items: center;
+}
+
+nav ul li {
+    margin: 5px 0;
+}
+
+main {
+    margin: 10px;
+    padding: 15px;
+}
+
+form input[type="text"],
+form input[type="number"],
+form select,
+form textarea {
+    width: calc(100% - 20px); /* Ajuste para preencher melhor em telas pequenas */
+}
+
+/* --- NOVOS ESTILOS PARA A FUNCIONALIDADE DE PESQUISA E AJUSTE DE ALTURA --- */
+.controle-diagrama,
+.controle-pesquisa {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 20px;
+background-color: #f0f0f0;
+padding: 15px;
+border-radius: 8px;
+border: 1px solid #ddd;
+flex-wrap: wrap; /* Adicionado para responsividade */
+}
+
+.controle-diagrama label,
+.controle-pesquisa label {
+font-weight: bold;
+color: #444;
+}
+
+.controle-diagrama input[type="number"] {
+width: 100px;
+padding: 8px;
+border: 1px solid #ccc;
+border-radius: 5px;
+}
+
+.controle-pesquisa input[type="text"] {
+padding: 8px;
+border: 1px solid #ccc;
+border-radius: 5px;
+flex-grow: 1; /* Permite que o input de pesquisa ocupe o espaço disponível */
+}
+
+.controle-diagrama button,
+.controle-pesquisa button {
+background-color: #28a745;
+color: white;
+border: none;
+padding: 8px 15px;
+border-radius: 5px;
+cursor: pointer;
+font-size: 1rem;
+transition: background-color 0.3s ease;
+}
+
+.controle-diagrama button:hover,
+.controle-pesquisa button:hover {
+background-color: #218838;
+}
+
+/* Estilo específico para o botão de limpar pesquisa */
+#clear-search-btn {
+background-color: #dc3545; /* Cor vermelha para limpar/cancelar */
+}
+
+#clear-search-btn:hover {
+background-color: #c82333;
+}
+
+/* --- CORREÇÕES E MELHORIAS DE RESPONSIVIDADE PARA ESTES ELEMENTOS --- */
+@media (max-width: 768px) {
+    .controle-diagrama,
+    .controle-pesquisa {
+    flex-direction: column;
+    align-items: stretch;
+    }
+    
+    .controle-diagrama input[type="number"],
+    .controle-pesquisa input[type="text"] {
+        width: 100%;
+    }
+    
+    }
+
+}
+

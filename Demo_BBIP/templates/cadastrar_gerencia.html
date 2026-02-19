@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastros Básicos (Gerência & Tecnologias){% endblock %}
+
+{% block main_content %}
+    
+    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 30px;">
+        <h2 style="margin-top: 0; color: #333;">Cadastrar Nova Gerência (TX)</h2>
+        <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">Sistema de Gerência de Transmissão (Ex: U2000, NCE, EPNM)</p>
+        
+        <form method="POST" action="{{ url_for('cadastrar_gerencia') }}">
+            <label for="nome_gerencia" style="font-weight: bold;">Nome da Gerência:</label>
+            <input type="text" id="nome_gerencia" name="nome_gerencia" required style="padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="submit" style="padding: 8px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold;">Salvar Gerência</button>
+        </form>
+    </div>
+
+    <hr style="border: 0; border-top: 2px dashed #ccc; margin: 30px 0;">
+
+    <div style="background-color: #e0f7fa; padding: 20px; border-radius: 8px; border: 1px solid #b2ebf2;">
+        <h2 style="margin-top: 0; color: #006064;">Cadastrar Tecnologia / Fabricante (Dados)</h2>
+        <p style="color: #006064; font-size: 0.9em; margin-bottom: 15px;">Fabricante dos Roteadores/Switches (Ex: CISCO, HUAWEI, NOKIA, DATACOM...)</p>
+
+        <form method="POST" action="{{ url_for('cadastrar_fabricante_dados') }}">
+            <label for="nome_fabricante" style="color: #006064; font-weight: bold;">Nome do Fabricante:</label>
+            <input type="text" id="nome_fabricante" name="nome_fabricante" required style="padding: 8px; width: 300px; border: 1px solid #00acc1; border-radius: 4px;">
+            <button type="submit" style="padding: 8px 15px; cursor: pointer; background-color: #00838f; color: white; border: none; border-radius: 4px; font-weight: bold;">Salvar Fabricante</button>
+        </form>
+    </div>
+    
+    <br>
+    <div style="text-align: center;">
+        <a href="{{ url_for('consultar_gerencias') }}" style="text-decoration: none; color: #555; font-size: 14px;">&larr; Voltar para Lista de Consultas</a>
+    </div>
+
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Elemento: {{ elemento.nome_elemento }}{% endblock %}
+
+{% block main_content %}
+    <h2>Detalhes do Elemento: {{ elemento.nome_elemento }}</h2>
+    <p><strong>ID:</strong> {{ elemento.id }}</p>
+    <p><strong>Nome:</strong> {{ elemento.nome_elemento }}</p>
+    <p><strong>Gerência:</strong> {{ gerencia_nome }}</p>
+    <p><strong>ACCID/LC(s):</strong> {{ accid_lcs_display }}</p> {# NOVO: Usando a variável passada do app.py #}
+    <p><strong>Swap de Fibra:</strong> {{ swap_fibras_display }}</p> {# NOVO: Usando a variável passada do app.py #}
+    <p><strong>Longa Distância:</strong> {{ 'Sim' if elemento.longa_distancia == 1 else 'Não' }}</p>
+    <p><strong>Estado Atual:</strong> {{ estado_atual_nome }}</p> {# NOVO: Exibe o nome do estado atual #}
+
+    <h3>Anéis de Conexão</h3>
+    {% if aneis %}
+        <ul class="content-list">
+            {% for anel in aneis %}
+                <li><a href="{{ url_for('detalhes_anel', anel_id=anel.id) }}">{{ anel.nome_anel }}</a></li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Este elemento não está associado a nenhum anel.</p>
+    {% endif %}
+
+    <h3>Vizinhos</h3>
+    {% if vizinhos %}
+        <ul class="content-list">
+            {% for vizinho in vizinhos %}
+                <li><a href="{{ url_for('detalhes_elemento', elemento_id=vizinho.id) }}">{{ vizinho.nome_elemento }} ({{ vizinho.nome_gerencia }}) 
+                    {% if vizinho.accid_lc %}[LC: {{ vizinho.accid_lc }}]{% endif %}
+                    {% if vizinho.nome_detentor %}[Provedor: {{ vizinho.nome_detentor }}]{% endif %} {# A informação de provedor aqui pode não ser o mais relevante, mas está na vizinhança #}
+                    {% if vizinho.longa_distancia is not none %}[Longa Dist.: {{ 'Sim' if vizinho.longa_distancia == 1 else 'Não' }}]{% endif %}
+                    {% if vizinho.swap_fibra_info %}[Swap: {{ vizinho.swap_fibra_info }}]{% endif %}
+                </a></li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Este elemento não possui vizinhos cadastrados.</p>
+    {% endif %}
+
+    <h3>Alarmes Ativos/Históricos</h3>
+    {% if alarmes %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tipo de Alarme</th>
+                    <th>Data/Hora</th>
+                    <th>Descrição</th>
+                    <th>Alarme Pai</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alarme in alarmes %}
+                    <tr>
+                        <td>{{ alarme.id }}</td>
+                        <td>{{ alarme.nome_tipo_alarme }}</td>
+                        <td>{{ moment(alarme.data_hora).format('DD/MM/YYYY HH:mm:ss') if alarme.data_hora else 'N/A' }}</td> {# Usando moment para formatação #}
+                        <td>{{ alarme.descricao if alarme.descricao else 'N/A' }}</td>
+                        <td>{% if alarme.alarme_pai_id %}{{ alarme.nome_alarme_pai }}{% else %}N/A{% endif %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nenhum alarme registrado para este elemento.</p>
+    {% endif %}
+
+    <br>
+    <p><a href="{{ url_for('consultar_elementos') }}">Voltar para a lista de Elementos</a></p>
+{% endblock %}

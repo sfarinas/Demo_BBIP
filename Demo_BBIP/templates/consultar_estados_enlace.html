@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Estados de Enlace{% endblock %}
+
+{% block main_content %}
+    <h2>Estados de Enlace Cadastrados</h2>
+    
+    {% if estados %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome do Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for estado in estados %}
+                    <tr>
+                        <td>{{ estado.id }}</td>
+                        <td>{{ estado.nome_estado }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nenhum estado de enlace cadastrado ainda.</p>
+    {% endif %}
+{% endblock %}

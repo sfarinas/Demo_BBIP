@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes do Incidente DADOS{% endblock %}
+
+{% block scripts_extra %}
+<style>
+    /* Estilos Específicos para o Painel de Dados */
+    .header-dados {
+        background-color: #e0f7fa;
+        border-left: 5px solid #00acc1;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .header-dados h2 { margin: 0; color: #006064; font-size: 24px; }
+    .header-dados .badge-id { 
+        background: #006064; color: white; padding: 5px 10px; 
+        border-radius: 4px; font-weight: bold; font-size: 14px; 
+    }
+
+    .section-title {
+        color: #00acc1;
+        border-bottom: 2px solid #b2ebf2;
+        padding-bottom: 8px;
+        margin-top: 30px;
+        margin-bottom: 15px;
+        font-size: 18px;
+        text-transform: uppercase;
+    }
+
+    /* Cards de Roteadores */
+    .router-container {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+    .router-card {
+        flex: 1;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        min-width: 300px;
+    }
+    .router-card.origin { border-top: 4px solid #2196F3; } /* Azul */
+    .router-card.dest { border-top: 4px solid #FF9800; }   /* Laranja */
+    
+    .router-card h3 { margin-top: 0; font-size: 16px; color: #555; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+    .info-label { color: #888; font-weight: bold; }
+    .info-val { color: #333; font-weight: bold; }
+
+    /* Badges de Status */
+    .badge-status { padding: 3px 8px; border-radius: 12px; font-size: 11px; color: white; }
+    .st-up { background-color: #28a745; }
+    .st-down { background-color: #dc3545; }
+    .st-inacessivel { background-color: #6c757d; }
+    .st-naoexiste { background-color: #000; }
+
+    /* Rota Física (Timeline) */
+    .route-timeline {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        position: relative;
+    }
+    .route-timeline::before {
+        content: '';
+        position: absolute;
+        top: 0; bottom: 0; left: 24px;
+        width: 2px;
+        background: #e0e0e0;
+        z-index: 0;
+    }
+    .hop-item {
+        position: relative;
+        padding: 10px 0 10px 60px;
+        z-index: 1;
+    }
+    .hop-marker {
+        position: absolute;
+        left: 15px; top: 12px;
+        width: 20px; height: 20px;
+        background: #00acc1;
+        border: 3px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px #00acc1;
+    }
+    .hop-content {
+        background: #f9f9f9;
+        padding: 10px 15px;
+        border-radius: 4px;
+        border: 1px solid #eee;
+        display: inline-block;
+        min-width: 300px;
+    }
+    .hop-content strong { color: #333; }
+
+    /* Animação do Alerta de Correlação */
+    @keyframes pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
+    }
+
+    /* Caixa de Relatório */
+    .report-box {
+        background-color: #f1f8e9;
+        border: 1px solid #c5e1a5;
+        padding: 15px;
+        border-radius: 5px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        color: #33691e;
+        position: relative;
+    }
+    .copy-btn {
+        position: absolute;
+        top: 10px; right: 10px;
+        background: #fff;
+        border: 1px solid #ccc;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    .copy-btn:hover { background: #eee; }
+</style>
+
+<script>
+    function copyReport() {
+        const text = document.getElementById('reportText').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('btnCopy');
+            btn.innerText = "Copiado! ✅";
+            setTimeout(() => btn.innerText = "Copiar Texto", 2000);
+        });
+    }
+</script>
+{% endblock %}
+
+{% block main_content %}
+
+    <div class="container-fluid" style="padding-top: 20px;">
+
+    {% if alerta_impacto %}
+    <div class="alert alert-danger shadow-lg mb-4" role="alert" style="border-left: 10px solid darkred; animation: pulse-red 2s infinite;">
+        <div style="display: flex; align-items: center;">
+            <div style="font-size: 40px; margin-right: 20px; color: #d32f2f;">
+                <i class="fas fa-biohazard fa-beat"></i>
+            </div>
+            <div>
+                <h4 class="alert-heading" style="font-weight: bold; margin-bottom: 5px; color: #b71c1c;">
+                    {{ alerta_impacto.titulo }}
+                </h4>
+                <p style="font-size: 16px; margin-bottom: 0; color: #333;">
+                    {{ alerta_impacto.mensagem | safe }}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if alerta_logico %}
+    <div class="alert alert-warning shadow-lg mb-4" role="alert" style="border-left: 10px solid #FFC107; background-color: #FFF8E1;">
+        <div style="display: flex; align-items: center;">
+            <div style="font-size: 40px; margin-right: 20px; color: #FFC107;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div>
+                <h4 class="alert-heading" style="font-weight: bold; margin-bottom: 5px; color: #F57F17;">
+                    {{ alerta_logico.titulo }}
+                </h4>
+                <p style="font-size: 16px; margin-bottom: 0; color: #333;">
+                    {{ alerta_logico.mensagem | safe }}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if correlacoes %}
+    <div style="background-color: #ffebee; border: 1px solid #ffcdd2; border-left: 5px solid #d32f2f; padding: 20px; border-radius: 5px; margin-bottom: 25px;">
+        <h3 style="margin-top: 0; color: #d32f2f; display: flex; align-items: center; gap: 10px;">
+            🚨 OUTROS EVENTOS RELACIONADOS
+        </h3>
+        <p style="font-size: 1.1em; color: #b71c1c; margin-bottom: 10px;">
+            O sistema identificou eventos de infraestrutura crítica (TX) afetando a rota física deste circuito:
+        </p>
+        <ul style="list-style: none; padding: 0;">
+            {% for c in correlacoes %}
+            <li style="background: white; padding: 10px; border-radius: 4px; border: 1px solid #ef9a9a; margin-bottom: 10px;">
+                <span style="font-size: 1.2em;">🔧</span> 
+                O elemento <b>{{ c.elemento_afetado }}</b> (Salto {{ c.ordem_salto }}) está envolvido no evento:
+                <br>
+                <div style="margin-top: 5px; padding-left: 25px;">
+                    <span class="badge" style="background-color: #d32f2f; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold;">{{ c.tipo_evento }}</span>
+                    <strong style="color: #333;">{{ c.titulo }}</strong>
+                    <br>
+                    <small style="color: #666;">Aberto em: {{ c.data_hora_abertura | utc_to_local }}</small>
+                    <br>
+                    <a href="{{ url_for('detalhes_evento', evento_id=c.evento_id) }}" target="_blank" style="color: #d32f2f; font-weight: bold; text-decoration: underline; display: inline-block; margin-top: 5px;">
+                        Ver Detalhes do Evento de Causa Raiz &rarr;
+                    </a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="header-dados">
+        <div>
+            <h2>Detalhes do Incidente DADOS</h2>
+            <div style="margin-top: 5px; color: #555;">
+                <span style="margin-right: 15px;">📅 Abertura: <b>{{ evento.data_hora_abertura | utc_to_local }}</b></span>
+                <span>⏱️ Próxima Atualização: <b>{{ evento.proxima_atualizacao | utc_to_local }}</b></span>
+            </div>
+        </div>
+        <div class="badge-id">EVENTO #{{ evento.id }}</div>
+    </div>
+
+    <div class="router-container">
+        
+        <div class="router-card origin">
+            <h3>📍 Roteador A (Origem)</h3>
+            <div class="info-row"><span class="info-label">Hostname:</span> <span class="info-val" style="font-size: 1.1em;">{{ circuito.orig_host }}</span></div>
+            <div class="info-row"><span class="info-label">Fabricante:</span> <span class="info-val">{{ circuito.orig_fab or '-' }}</span></div>
+            <div class="info-row"><span class="info-label">Status:</span> 
+                <span class="badge-status 
+                    {% if circuito.orig_status == 'UP' %}st-up
+                    {% elif circuito.orig_status == 'DOWN' %}st-down
+                    {% elif circuito.orig_status == 'INACESSIVEL' %}st-inacessivel
+                    {% else %}st-naoexiste{% endif %}">
+                    {{ circuito.orig_status or 'N/A' }}
+                </span>
+            </div>
+            <div class="info-row"><span class="info-label">Alarme:</span> <span class="info-val" style="color:red;">{{ circuito.orig_alarme or 'Sem alarme' }}</span></div>
+        </div>
+
+        <div class="router-card" style="border-top: 4px solid #9C27B0; flex: 0 0 200px;">
+            <h3>⚡ Serviço / Falha</h3>
+            <div style="text-align: center; margin-top: 15px;">
+                <div style="font-size: 12px; color: #888;">ACCID / CIRCUITO</div>
+                <div style="font-size: 18px; font-weight: bold; color: #333; margin-bottom: 15px;">{{ circuito.accid }}</div>
+                
+                <div style="font-size: 12px; color: #888;">TIPO DE FALHA</div>
+                <div style="font-size: 16px; font-weight: bold; color: #D32F2F;">{{ circuito.tipo_falha }}</div>
+            </div>
+        </div>
+
+        <div class="router-card dest">
+            <h3>🎯 Roteador B (Destino)</h3>
+            {% if circuito.roteador_destino_id %}
+                <div class="info-row"><span class="info-label">Hostname:</span> <span class="info-val" style="font-size: 1.1em;">{{ circuito.dest_host }}</span></div>
+                <div class="info-row"><span class="info-label">Fabricante:</span> <span class="info-val">{{ circuito.dest_fab or '-' }}</span></div>
+                <div class="info-row"><span class="info-label">Status:</span> 
+                    <span class="badge-status 
+                        {% if circuito.dest_status == 'UP' %}st-up
+                        {% elif circuito.dest_status == 'DOWN' %}st-down
+                        {% elif circuito.dest_status == 'INACESSIVEL' %}st-inacessivel
+                        {% else %}st-naoexiste{% endif %}">
+                        {{ circuito.dest_status or 'N/A' }}
+                    </span>
+                </div>
+                <div class="info-row"><span class="info-label">Alarme:</span> <span class="info-val" style="color:red;">{{ circuito.dest_alarme or 'Sem alarme' }}</span></div>
+            {% else %}
+                <div style="text-align: center; padding: 30px; color: #aaa; font-style: italic;">
+                    Sem Destino / Ponta Única<br>Cliente ou Nuvem
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="section-title">🔗 Rota Física (Camada TX)</div>
+    
+    {% if hops %}
+        <ul class="route-timeline">
+            {% for hop in hops %}
+            <li class="hop-item">
+                <div class="hop-marker"></div>
+                <div class="hop-content">
+                    <div style="font-size: 10px; color: #888; text-transform: uppercase;">Salto {{ hop.ordem_salto }}</div>
+                    <strong>{{ hop.nome_elemento }}</strong>
+                    <div style="font-size: 12px; color: #007bff; margin-top: 5px;">
+                        <a href="{{ url_for('detalhes_elemento', elemento_id=hop.elem_id) }}" target="_blank" style="text-decoration: none;">
+                            Ver detalhes do elemento &rarr;
+                        </a>
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p style="color: #666; font-style: italic; background: #f9f9f9; padding: 15px;">Nenhuma rota física cadastrada para este circuito.</p>
+    {% endif %}
+
+    <div class="section-title">📝 Relatório de Acionamento (Texto Padrão)</div>
+    
+    <div class="report-box">
+        <button id="btnCopy" class="copy-btn" onclick="copyReport()">Copiar Texto</button>
+        <div id="reportText">{{ evento.descricao }}</div>
+    </div>
+
+    <br>
+    <div style="display: flex; gap: 10px; margin-top: 20px; margin-bottom: 40px;">
+        <a href="{{ url_for('relatorio_eventos') }}" class="button" style="background-color: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">&larr; Voltar para Lista</a>
+        
+        <button class="button" style="background-color: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;" onclick="alert('Funcionalidade de Mapa em desenvolvimento!')">🗺️ Ver no Mapa</button>
+    </div>
+
+    </div> {% endblock %}

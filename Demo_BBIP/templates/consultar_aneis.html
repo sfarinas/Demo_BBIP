@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Anéis{% endblock %}
+
+{% block main_content %}
+    <h2>Anéis Cadastrados</h2>
+    
+    {% if aneis %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome do Anel</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for anel in aneis %}
+                    <tr>
+                        <td>{{ anel.id }}</td>
+                        <td>{{ anel.nome_anel }}</td>
+                        <td><a href="{{ url_for('detalhes_anel', anel_id=anel.id) }}" class="button small-button">Detalhes</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nenhum anel cadastrado ainda.</p>
+    {% endif %}
+{% endblock %}

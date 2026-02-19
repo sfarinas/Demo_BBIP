@@ -1,0 +1,1031 @@
+{% extends "base.html" %}
+
+{% block title %}Visualização BBIP - CyberOps (Matrix Mode){% endblock %}
+
+{% block scripts_extra %}
+<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+
+
+<style>
+    /* --- VARIÁVEIS DE CORES (BASE / MODO CLARO) --- */
+    :root {
+        --bg-color: #fcfcfc;
+        --panel-bg: #fff;
+        --text-color: #333;
+        --accent-color: #00acc1; /* Ciano TIM */
+        --border-color: #ccc;
+        --alert-color: #d32f2f;
+        --success-color: #28a745; /* Verde Sucesso */
+        --router-color: #7b1fa2; /* Violeta para Roteadores */
+        --font-main: 'Roboto', sans-serif;
+    }
+
+    /* --- VARIÁVEIS DO MODO MATRIX (OVERRIDE) --- */
+    body.matrix-mode {
+        --bg-color: #050505; /* Preto Profundo */
+        --panel-bg: rgba(10, 20, 10, 0.95); /* Vidro Fumê */
+        --text-color: #00ff41; /* Verde Hacker */
+        --accent-color: #00ff41;
+        --border-color: #333;
+        --alert-color: #ff003c; /* Vermelho Cyber */
+        --success-color: #00ff41;
+        --router-color: #00e5ff; /* Ciano Neon para Roteadores no Matrix */
+        --font-main: 'Share Tech Mono', monospace; /* Fonte Sci-Fi */
+    }
+
+    body { font-family: var(--font-main); color: var(--text-color); transition: background 0.3s, color 0.3s; margin: 0; }
+
+    /* --- LAYOUT & CONTROLES --- */
+    .toolbar-container {
+        background: var(--panel-bg); padding: 10px 15px; border-bottom: 1px solid var(--border-color);
+        display: flex; flex-wrap: wrap; gap: 15px; align-items: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .control-group { display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border-color); padding-right: 15px; }
+    .control-group:last-child { border: none; }
+
+    /* Estilo dos Botões e Inputs adaptável */
+    button, input, select {
+        padding: 5px 10px; border-radius: 4px; font-family: var(--font-main);
+        border: 1px solid #ccc; background: #eee; color: #333; cursor: pointer;
+        transition: all 0.2s;
+    }
+    button:hover { background: #ddd; transform: translateY(-1px); }
+    
+    body.matrix-mode button, body.matrix-mode input, body.matrix-mode select {
+        background: #111; border: 1px solid #00ff41; color: #00ff41;
+    }
+    body.matrix-mode button:hover { background: #003300; box-shadow: 0 0 8px #00ff41; }
+
+    /* Botão Sherlock Especial */
+    .btn-sherlock {
+        border-color: var(--router-color) !important;
+        color: var(--router-color) !important;
+        font-weight: bold;
+    }
+    body.matrix-mode .btn-sherlock:hover {
+        background: rgba(0, 229, 255, 0.2);
+        box-shadow: 0 0 15px var(--router-color);
+    }
+
+    /* --- VARIÁVEIS DO MODO CYBERPUNK (SYNTHWAVE) --- */
+    body.cyberpunk-mode {
+        --bg-color: #0b001a; /* Roxo Profundo do Espaço */
+        --panel-bg: rgba(25, 0, 50, 0.9); /* Vidro Roxo */
+        --text-color: #00e5ff; /* Ciano Neon */
+        --accent-color: #d500f9; /* Roxo Neon Vibrante */
+        --border-color: #d500f9;
+        --alert-color: #ffea00; /* Amarelo Elétrico */
+        --success-color: #ff0055; /* Rosa Laser */
+        --router-color: #ff9100; /* Laranja Pôr do Sol */
+        --font-main: 'Share Tech Mono', monospace; /* Fonte Sci-Fi */
+    }
+
+    /* Estilização Especial dos Botões no Cyberpunk */
+    body.cyberpunk-mode button, body.cyberpunk-mode input, body.cyberpunk-mode select {
+        background: #2a0044; border: 1px solid #d500f9; color: #d500f9;
+        box-shadow: 0 0 5px #d500f9; text-shadow: 0 0 5px #d500f9;
+    }
+    body.cyberpunk-mode button:hover {
+        background: #d500f9; color: #fff; box-shadow: 0 0 20px #d500f9;
+    }
+    
+    /* HUD Cyberpunk */
+    body.cyberpunk-mode .hud-panel {
+        background: linear-gradient(135deg, rgba(20,0,40,0.9), rgba(40,0,80,0.9));
+        border: 1px solid #00e5ff;
+        box-shadow: 0 0 15px rgba(213, 0, 249, 0.4);
+    }
+    
+    /* Header do Raio-X Cyberpunk */
+    body.cyberpunk-mode .raiox-header {
+        background: linear-gradient(90deg, #d500f9, #7c4dff);
+        border-bottom: 2px solid #00e5ff;
+    }
+
+    /* Botão Cluster (Amarelo) */
+    .btn-cluster {
+        background-color: #FFD700 !important;
+        color: black !important;
+        border: 1px solid #c5a900 !important;
+        font-weight: bold;
+    }
+    .btn-cluster:hover { background-color: #FFC107 !important; }
+
+    /* --- DIAGRAMA --- */
+    #network-diagram-container {
+        height: 85vh; 
+        background-color: var(--bg-color); 
+        border: 1px solid var(--border-color);
+        transition: background-color 0.5s ease;
+        position: relative;
+    }
+
+    /* --- HUD (HEADS-UP DISPLAY) - STATUS --- */
+    .hud-panel {
+        position: absolute; top: 20px; right: 20px; 
+        background: rgba(255, 255, 255, 0.9); border: 1px solid var(--accent-color);
+        padding: 15px; border-radius: 4px; z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); pointer-events: none; 
+        min-width: 200px;
+    }
+    body.matrix-mode .hud-panel {
+        background: rgba(0, 20, 0, 0.85); border-color: #00ff41;
+        box-shadow: 0 0 15px rgba(0,255,65,0.2);
+    }
+    
+    .hud-title { border-bottom: 1px solid var(--accent-color); margin-bottom: 10px; padding-bottom: 5px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    .hud-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; align-items: center; }
+    .hud-value { font-weight: bold; font-size: 18px; }
+    
+    /* Cores HUD */
+    .val-routers { color: var(--router-color); }
+    .val-alert { color: var(--alert-color); }
+
+    /* --- CUSTOM TOOLTIP (SOBRESCREVE VIS.JS) --- */
+    div.vis-tooltip {
+        background-color: var(--panel-bg) !important;
+        border: 1px solid var(--accent-color) !important;
+        border-radius: 6px !important;
+        padding: 10px !important;
+        color: var(--text-color) !important;
+        font-family: var(--font-main) !important;
+        font-size: 12px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+        z-index: 10000 !important;
+        max-width: 300px !important;
+        white-space: normal !important;
+    }
+
+    /* --- MODAL DE RAIO-X (FIBRAS) --- */
+    .modal-raiox {
+        display: none; position: fixed; z-index: 12000; left: 0; top: 0; width: 100%; height: 100%; 
+        background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    }
+    .modal-content-raiox {
+        background-color: var(--panel-bg); margin: 10vh auto; padding: 0;
+        border: 1px solid var(--accent-color); width: 50%; max-width: 600px;
+        border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        color: var(--text-color); animation: slideDown 0.3s ease-out;
+    }
+    @keyframes slideDown { from {transform: translateY(-50px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
+    
+    .raiox-header {
+        background: var(--accent-color); color: #fff; padding: 15px 20px;
+        border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;
+    }
+    body.matrix-mode .raiox-header { background: #003300; border-bottom: 1px solid #00ff41; color: #00ff41; }
+    .raiox-body { padding: 20px; max-height: 500px; overflow-y: auto; }
+    .close-raiox { font-size: 28px; font-weight: bold; cursor: pointer; }
+
+    /* --- PAINEL LATERAL (SITES) --- */
+    #side-panel {
+        position: fixed; top: 150px; right: -450px; width: 380px; height: calc(100vh - 160px);
+        background-color: var(--panel-bg);
+        border-left: 4px solid var(--accent-color);
+        box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+        transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 10000;
+        display: flex; flex-direction: column; color: var(--text-color);
+    }
+    #side-panel.open { right: 0; }
+
+    .sp-header {
+        background: #f0f0f0; color: #333; padding: 15px; font-weight: bold; font-size: 16px;
+        display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc;
+    }
+    body.matrix-mode .sp-header { background: #001100; border-bottom: 1px solid #00ff41; color: #00ff41; }
+    .sp-content { padding: 20px; overflow-y: auto; flex: 1; font-size: 13px; }
+
+    /* Cards Internos (Circuitos e Fluxos) */
+    .circuit-card {
+        background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
+        border-left: 4px solid var(--router-color);
+        padding: 10px; margin-bottom: 10px; border-radius: 4px;
+    }
+    .router-flow {
+        display: flex; justify-content: space-between; align-items: center;
+        background: rgba(0,0,0,0.2); padding: 5px; margin-top: 5px; border-radius: 4px;
+        font-family: monospace; font-size: 11px;
+    }
+    .router-name { color: var(--router-color); font-weight: bold; }
+
+    /* LOADING */
+    .loading-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: var(--bg-color); opacity: 0.9;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 10; color: var(--accent-color); font-weight: bold;
+    }
+    .loader-spinner {
+        border: 5px solid transparent; border-top: 5px solid var(--accent-color); border-radius: 50%;
+        width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block main_content %}
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px;">
+        <h2 style="margin:0;">Diagrama BBIP - Centro de Comando</h2>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-sherlock" onclick="runSherlockUpdate()">
+                🕵️‍♂️ Sherlock (Corrigir Roteadores)
+            </button>
+            <button id="logic-mode-btn">☁️ Visão Lógica (L3)</button>
+            <button id="btn-theme" onclick="cycleTheme()" title="Alternar Tema Visual">🕶️ MODO MATRIX</button>
+        </div>
+    </div>
+
+    <div class="toolbar-container">
+        <div class="control-group">
+            <button id="cluster-uf-btn" onclick="toggleClusterUF()" class="btn-cluster" style="background:#FFD700; color:black;">
+                🇧🇷 AGRUPAR POR UF
+            </button>
+        </div>
+
+        <div class="control-group">
+            <button id="layout-hierarquico-btn">Hierárquico</button>
+            <button id="layout-fisico-btn">Dinâmico</button>
+            <label style="margin-left:5px; cursor:pointer;"><input type="checkbox" id="physics-toggle-checkbox" checked> Física Ativa</label>
+        </div>
+
+        <div class="control-group">
+            <input type="text" id="search-input" placeholder="Buscar Site, Cidade ou Roteador..." style="width: 250px;">
+            <button id="search-btn">🔍</button>
+            <button id="clear-search-btn">❌</button>
+        </div>
+        
+        <div class="control-group">
+            <small>Zoom:</small>
+            <button onclick="network.moveTo({scale: 0.2})">🌍</button>
+            <button onclick="network.fit()">🎯</button>
+        </div>
+    </div>
+
+    <div style="position: relative;">
+        <div id="network-diagram-container"></div>
+        
+        <div class="hud-panel" id="hud-panel">
+            <div class="hud-title">STATUS REDE</div>
+            <div class="hud-item"><span>Sites Físicos:</span> <span class="hud-value" id="hud-sites">0</span></div>
+            <div class="hud-item" style="color:var(--alert-color);"><span>Falhas (8h):</span> <span class="hud-value val-alert" id="hud-alarms">0</span></div>
+            <div class="hud-item" style="border-top:1px dashed #555; padding-top:5px; margin-top:5px;">
+                <span>Total Roteadores:</span> <span class="hud-value val-routers" id="hud-routers">0</span>
+            </div>
+        </div>
+
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loader-spinner"></div>
+            <div id="loadingText">Inicializando Sistema...</div>
+        </div>
+    </div>
+
+    <div id="side-panel">
+        <div class="sp-header">
+            <span id="sp-title">📋 DETALHES DO SITE</span>
+            <button class="sp-close-btn" onclick="closeSidePanel()" style="background:none; border:none; color:inherit; font-size:20px; cursor:pointer;">×</button>
+        </div>
+        <div id="sp-content-area" class="sp-content">
+            <p style="text-align: center; opacity:0.7;">Clique em um site para ver detalhes.</p>
+        </div>
+    </div>
+
+    <div id="modalRaioX" class="modal-raiox">
+        <div class="modal-content-raiox">
+            <div class="raiox-header">
+                <h3 style="margin:0;">📡 Conexão Física (Link)</h3>
+                <span class="close-raiox" onclick="fecharRaioX()">&times;</span>
+            </div>
+            <div class="raiox-body" id="raioxBody">Carregando...</div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        let network; 
+        let nodesDataSet; 
+        let edgesDataSet; 
+        let isClusteredByUF = false; 
+        let stateModeActive = false; 
+        let tempCloudNodes = []; 
+        let tempCloudEdges = []; 
+
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const nodesData = {{ nodes_data | tojson }};
+            const edgesData = {{ edges_data | tojson }};
+            const body = document.body;
+            
+            // --- 2. PREPARAÇÃO DOS DADOS ---
+            nodesData.forEach(n => {
+                if (!n.cluster_uf) n.cluster_uf = 'N/A';
+                if (n.title) {
+                    const div = document.createElement('div');
+                    div.innerHTML = n.title;
+                    n.title = div;
+                }
+            });
+
+            edgesData.forEach(e => {
+                if (e.title) {
+                    const div = document.createElement('div');
+                    div.innerHTML = e.title;
+                    e.title = div; 
+                }
+            });
+
+            nodesDataSet = new vis.DataSet(nodesData);
+            edgesDataSet = new vis.DataSet(edgesData);
+
+            const container = document.getElementById('network-diagram-container');
+            const overlay = document.getElementById('loadingOverlay');
+            const loadText = document.getElementById('loadingText');
+
+            function updateHUD() {
+                document.getElementById('hud-sites').innerText = nodesData.length;
+                const totalRouters = nodesData.reduce((acc, n) => acc + (n.qtd_roteadores || 0), 0);
+                document.getElementById('hud-routers').innerText = totalRouters;
+                const alarms = nodesData.filter(n => n.esta_afetado === 1).length;
+                document.getElementById('hud-alarms').innerText = alarms;
+            }
+            updateHUD();
+
+            // Detecta tema inicial salvo
+            let savedTheme = localStorage.getItem('theme') || 'light';
+            // Variável global de tema para controle (0: Light, 1: Matrix, 2: Cyberpunk)
+            let currentTheme = (savedTheme === 'matrix') ? 1 : (savedTheme === 'cyberpunk' ? 2 : 0);
+            
+            let isLogicalMode = false;
+
+            // Função auxiliar para pegar opções visuais baseadas no tema
+            function getVisOptions(themeCode) {
+                // 0: Light, 1: Matrix, 2: Cyberpunk
+                let fontColor = '#333';
+                let edgeColor = '#848484';
+                let nodeBg = '#fff';
+                let nodeBorder = '#00acc1';
+                let fontFace = 'Roboto';
+
+                if (themeCode === 1) { // MATRIX
+                    fontColor = '#00ff41';
+                    edgeColor = '#1a441a';
+                    nodeBg = '#000';
+                    nodeBorder = '#00ff41';
+                    fontFace = 'Share Tech Mono';
+                } else if (themeCode === 2) { // CYBERPUNK
+                    fontColor = '#00e5ff';
+                    edgeColor = '#4a148c'; // Roxo escuro para arestas
+                    nodeBg = '#0b001a';
+                    nodeBorder = '#d500f9';
+                    fontFace = 'Share Tech Mono';
+                }
+
+                return {
+                    nodes: { 
+                        shape: 'dot', size: 25, borderWidth: 2, shadow: true,
+                        font: { size: 14, color: fontColor, face: fontFace, strokeWidth: (themeCode > 0) ? 0 : 3, strokeColor: '#fff' },
+                        color: { 
+                            background: nodeBg, 
+                            border: nodeBorder, 
+                            highlight: { background: (themeCode > 0) ? '#fff' : '#e0f7fa', border: nodeBorder } 
+                        }
+                    },
+                    edges: {
+                        width: 2,
+                        color: { color: edgeColor, highlight: '#ff003c', hover: '#ff003c' },
+                        smooth: { type: 'continuous', roundness: 0.5 },
+                        font: { align: 'top', size: 10, color: fontColor, face: fontFace }
+                    },
+                    physics: {
+                        enabled: true,
+                        stabilization: { enabled: true, iterations: 200 },
+                        barnesHut: { gravitationalConstant: -8000, centralGravity: 0.1, springLength: 200, damping: 0.09 }
+                    },
+                    interaction: { hover: true, tooltipDelay: 100, navigationButtons: true, keyboard: true }
+                };
+            }
+
+            // Inicializa a rede
+            network = new vis.Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, getVisOptions(currentTheme));
+
+            // Aplica classes CSS iniciais
+            if (currentTheme === 1) body.classList.add('matrix-mode');
+            if (currentTheme === 2) body.classList.add('cyberpunk-mode');
+            applyNodeTheme(); // Aplica cores nos nós individuais
+
+            // Função que atualiza a aparência dos NÓS (Sites)
+            function applyNodeTheme() {
+                // Recalcula cores baseadas no tema atual (currentTheme global)
+                const themeCode = currentTheme;
+                const isDark = themeCode > 0;
+                
+                // Cores padrão para cada tema
+                let defaultBg = '#fff'; let defaultBorder = '#00acc1';
+                if (themeCode === 1) { defaultBg = '#000'; defaultBorder = '#00ff41'; } // Matrix
+                if (themeCode === 2) { defaultBg = '#0b001a'; defaultBorder = '#d500f9'; } // Cyberpunk
+
+                const updates = nodesData.map(n => {
+                    let isAffected = n.esta_afetado === 1; 
+                    let baseColor = n.color ? n.color.background : defaultBg;
+                    let borderColor = n.color ? n.color.border : defaultBorder;
+                    
+                    // Ajustes específicos do Matrix (Nós pretos se não afetados)
+                    if (themeCode === 1 && !isAffected) {
+                        baseColor = '#000'; 
+                        if (n.color && n.color.border !== '#00acc1') borderColor = n.color.border;
+                    }
+                    // Ajustes específicos do Cyberpunk
+                    if (themeCode === 2 && !isAffected) {
+                        baseColor = '#0b001a';
+                    }
+                    
+                    let opacity = 1;
+                    let isL3 = (n.qtd_roteadores > 0) || (n.tipo_icone === 'nuvem');
+                    if (isLogicalMode && !isL3) { opacity = 0.1; borderColor = '#444'; }
+
+                    return {
+                        id: n.id,
+                        color: { background: baseColor, border: borderColor },
+                        opacity: opacity,
+                        shape: (n.tipo_icone === 'nuvem' && !isDark) ? 'cloud' : 'dot' 
+                    };
+                });
+                nodesDataSet.update(updates);
+                network.setOptions(getVisOptions(themeCode));
+            }
+
+            // --- CICLO DE TEMAS (SEM EXPLOSÃO 💥) ---
+            window.cycleTheme = function() {
+                currentTheme = (currentTheme + 1) % 3; 
+                
+                const btn = document.getElementById('btn-theme');
+
+                // 1. Limpa temas anteriores
+                body.classList.remove('matrix-mode', 'cyberpunk-mode');
+                localStorage.setItem('theme', 'light');
+
+                // 2. Aplica o novo tema
+                if (currentTheme === 0) {
+                    // CLARO
+                    btn.innerText = "🕶️ MODO MATRIX";
+                    btn.style.backgroundColor = ""; btn.style.color = ""; btn.style.boxShadow = "";
+                } else if (currentTheme === 1) {
+                    // MATRIX
+                    body.classList.add('matrix-mode');
+                    localStorage.setItem('theme', 'matrix');
+                    btn.innerText = "🟣 MODO CYBERPUNK";
+                    btn.style.backgroundColor = "#111"; btn.style.color = "#00ff41";
+                } else {
+                    // CYBERPUNK
+                    body.classList.add('cyberpunk-mode');
+                    localStorage.setItem('theme', 'cyberpunk');
+                    btn.innerText = "☀️ MODO CLARO";
+                    btn.style.backgroundColor = "#2a0044"; btn.style.color = "#d500f9";
+                }
+                
+                // 3. Atualiza os nós do diagrama
+                applyNodeTheme();
+
+                // 4. ATUALIZA CLUSTERS (CIRÚRGICO - SEM DESAGRUPAR)
+                if (typeof isClusteredByUF !== 'undefined' && isClusteredByUF) {
+                    // Define a cor da fonte baseada no tema novo
+                    let clusterFontColor = '#333';
+                    if (currentTheme === 1) clusterFontColor = '#00ff41'; // Verde Matrix
+                    if (currentTheme === 2) clusterFontColor = '#00e5ff'; // Ciano Cyberpunk
+
+                    // Identifica todos os clusters existentes
+                    const clusterNodes = network.body.nodeIndices.filter(id => network.isCluster(id));
+                    
+                    // Atualiza a opção de fonte de cada cluster diretamente
+                    clusterNodes.forEach(clusterId => {
+                         network.updateClusteredNode(clusterId, {
+                             font: { color: clusterFontColor }
+                         });
+                    });
+                    // Força redesenho leve
+                    network.redraw();
+                }
+            };
+            
+            // Inicializa botão com texto correto
+            const btnTheme = document.getElementById('btn-theme');
+            if (currentTheme === 1) { btnTheme.innerText = "🟣 MODO CYBERPUNK"; btnTheme.style.backgroundColor = "#111"; btnTheme.style.color = "#00ff41"; }
+            if (currentTheme === 2) { btnTheme.innerText = "☀️ MODO CLARO"; btnTheme.style.backgroundColor = "#2a0044"; btnTheme.style.color = "#d500f9"; }
+
+
+            document.getElementById('logic-mode-btn').addEventListener('click', () => {
+                isLogicalMode = !isLogicalMode;
+                const btn = document.getElementById('logic-mode-btn');
+                btn.style.borderColor = isLogicalMode ? "var(--router-color)" : "";
+                btn.style.color = isLogicalMode ? "var(--router-color)" : "";
+                applyNodeTheme();
+            });
+
+            document.getElementById('physics-toggle-checkbox').addEventListener('change', function() {
+                network.setOptions({ physics: { enabled: this.checked } });
+            });
+            
+            document.getElementById('layout-hierarquico-btn').addEventListener('click', function() {
+                network.setOptions({
+                    layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed' } },
+                    physics: { enabled: false }
+                });
+            });
+
+            document.getElementById('layout-fisico-btn').addEventListener('click', function() {
+                network.setOptions({
+                    layout: { hierarchical: { enabled: false } },
+                    physics: { enabled: true }
+                });
+            });
+
+            network.on("stabilizationIterationsDone", function() {
+                loadText.innerText = "Sistema Online.";
+                setTimeout(() => { 
+                    overlay.style.display = "none"; 
+                    if (!isClusteredByUF) {
+                        window.toggleClusterUF(); 
+                    }
+                }, 100);
+            });
+
+            // CLIQUE E RAIO-X
+            network.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    if (network.isCluster(nodeId)) return;
+                    const node = nodesDataSet.get(nodeId);
+                    if (node) carregarPainelSite(node);
+                } else if (params.edges.length > 0) {
+                    const edgeId = params.edges[0];
+                    const edge = edgesDataSet.get(edgeId);
+                    if(edge) {
+                        const destinoReal = edge.real_target ? edge.real_target : edge.to;
+                        abrirRaioXLink(edge.from, destinoReal); 
+                    }
+                } else {
+                    closeSidePanel();
+                }
+            });
+
+            network.on("doubleClick", function(params) {
+                if (params.nodes.length == 1) {
+                    const nodeId = params.nodes[0];
+                    if (network.isCluster(nodeId)) {
+                        const uf = nodeId.replace('cluster_uf_', '');
+                        enterStateMode(uf);
+                    }
+                }
+            });
+
+            // --- PAINEL LATERAL & PESQUISA (Código Mantido) ---
+            async function carregarPainelSite(node) {
+                const panel = document.getElementById('side-panel');
+                const title = document.getElementById('sp-title');
+                const content = document.getElementById('sp-content-area');
+                
+                title.innerText = `🏢 SITE: ${node.id}`;
+                panel.classList.add('open');
+                
+                let html = `
+                    <div style="background: var(--bg-color); border:1px solid var(--border-color); padding:10px; border-radius:4px; margin-bottom:15px;">
+                        <div style="font-size:18px; font-weight:bold; color:var(--accent-color);">${node.label}</div>
+                        ${node.qtd_roteadores ? `<div style="margin-top:5px; font-weight:bold; color:var(--router-color);">🤖 ${node.qtd_roteadores} Roteadores L3</div>` : '<div style="color:#777; font-size:11px;">Sem Roteadores</div>'}
+                        <hr style="border-color:var(--border-color); opacity:0.3;">
+                        <div style="font-size:12px;">
+                            ${node.cidade ? `📍 ${node.cidade} - ${node.uf}<br>` : ''}
+                            ${node.endereco ? `🏠 ${node.endereco}` : ''}
+                        </div>
+                    </div>
+                    
+                    <h4 style="border-bottom: 2px solid var(--accent-color); padding-bottom:5px; margin-bottom:10px;">
+                        🖧 Elementos Físicos & Vizinhos
+                    </h4>
+                    <div id="fisico-list-area" style="margin-bottom:20px;">
+                        <div class="loader-spinner" style="width:20px; height:20px; border-width:2px;"></div> Buscando topologia...
+                    </div>
+
+                    <h4 style="border-bottom: 2px solid var(--accent-color); padding-bottom:5px; margin-bottom:10px;">
+                        🔌 Circuitos Passantes
+                    </h4>
+                    <div id="circuits-list-area">
+                        <div class="loader-spinner" style="width:20px; height:20px; border-width:2px;"></div> Buscando circuitos...
+                    </div>
+                `;
+                content.innerHTML = html;
+
+                try {
+                    const resp = await fetch('/api/diagrama/detalhes_site_bbip', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ nome_site: node.id })
+                    });
+                    const res = await resp.json();
+                    
+                    let fisicoHtml = "";
+                    if (res.equipamentos && res.equipamentos.length > 0) {
+                        res.equipamentos.forEach(eq => {
+                            fisicoHtml += `
+                            <div class="circuit-card" style="border-left: 4px solid #4CAF50;">
+                                <div style="font-weight:bold; font-size:13px; color:var(--text-color); border-bottom:1px dashed #555; padding-bottom:3px; margin-bottom:3px;">
+                                    ${eq.nome}
+                                </div>
+                                <div style="font-size:10px; color:#888;">Gerência: ${eq.gerencia || 'N/A'}</div>
+                                <div style="margin-top:5px; font-size:11px;">
+                                    <b>↳ Conecta com:</b><br>
+                            `;
+                            if (eq.vizinhos && eq.vizinhos.length > 0) {
+                                eq.vizinhos.forEach(viz => {
+                                    fisicoHtml += `
+                                    <div style="padding-left:10px; margin-top:2px; border-left:2px solid #ccc;">
+                                        🔗 <b>${viz.nome_elemento}</b> <span style="font-size:10px;">(${viz.estado})</span><br>
+                                        <span style="font-size:10px; color:#aaa;">ACCID: ${viz.accid_lc || '--'}</span>
+                                    </div>`;
+                                });
+                            } else {
+                                fisicoHtml += `<span style="font-style:italic; color:#777;">Sem vizinhos registrados.</span>`;
+                            }
+                            fisicoHtml += `</div></div>`;
+                        });
+                    } else {
+                        fisicoHtml = `<div style="padding:10px; opacity:0.6; font-size:12px;">Nenhum elemento TX encontrado.</div>`;
+                    }
+                    document.getElementById('fisico-list-area').innerHTML = fisicoHtml;
+
+                    if (res.success && res.total_circuitos > 0) {
+                        let listHtml = `<p style="opacity:0.7; font-size:11px;">Total: ${res.total_circuitos}</p>`;
+                        res.circuitos.forEach(c => {
+                            let statusTexto = c.status_visual || c.tipo_falha || 'N/A';
+                            let corTexto = 'black'; 
+                            let bgBadge = '#eee';
+                            if (c.cor_status === 'green') {
+                                corTexto = 'var(--success-color)';
+                                bgBadge = 'rgba(40, 167, 69, 0.1)';
+                            } else if (c.cor_status === 'red' || statusTexto.toUpperCase().includes("DOWN")) {
+                                corTexto = 'var(--alert-color)';
+                                bgBadge = 'rgba(211, 47, 47, 0.1)';
+                            }
+
+                            listHtml += `
+                            <div class="circuit-card">
+                                <div style="font-weight:bold; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+                                    <span>${c.accid || 'S/ ID'}</span>
+                                    <span style="font-size:10px; background:${bgBadge}; color:${corTexto}; padding:2px 6px; border-radius:3px; border:1px solid ${corTexto};">
+                                        ${statusTexto}
+                                    </span>
+                                </div>
+                                <div class="router-flow">
+                                    <span>${c.roteador_origem_hostname || 'Origem?'}</span> 
+                                    <span style="color:var(--text-color);">➡</span> 
+                                    <span>${c.roteador_destino_hostname || 'Destino?'}</span>
+                                </div>
+                            </div>`;
+                        });
+                        document.getElementById('circuits-list-area').innerHTML = listHtml;
+                    } else {
+                        document.getElementById('circuits-list-area').innerHTML = `<div style="padding:15px; text-align:center; opacity:0.6; border:1px dashed #555;">Nenhum circuito de dados encontrado.</div>`;
+                    }
+                } catch(e) { 
+                    console.log(e);
+                    document.getElementById('circuits-list-area').innerHTML = "Erro de conexão."; 
+                    document.getElementById('fisico-list-area').innerHTML = "Erro de conexão.";
+                }
+            }
+
+            const searchInput = document.getElementById('search-input');
+            
+            async function doSearch() {
+                const term = searchInput.value.toLowerCase().trim();
+                if (!term) return;
+
+                if (stateModeActive) {
+                    await exitStateMode(); 
+                    await sleep(1000); 
+                }
+
+                const allNodes = nodesDataSet.get(); 
+                const allEdges = edgesDataSet.get();
+
+                let foundNode = allNodes.find(item => {
+                    return (item.id.toLowerCase().includes(term) || 
+                           (item.label && item.label.toLowerCase().includes(term)));
+                });
+
+                if (!foundNode) {
+                    const foundEdge = allEdges.find(edge => {
+                        if (edge.accid_list && typeof edge.accid_list === 'string') {
+                            return edge.accid_list.toLowerCase().includes(term);
+                        }
+                        return false;
+                    });
+                    
+                    if (foundEdge) {
+                        foundNode = nodesDataSet.get(foundEdge.from);
+                        setTimeout(() => {
+                            try {
+                                network.selectEdges([foundEdge.id]); 
+                                alert(`⚡ CIRCUITO ENCONTRADO!\nLink entre: ${foundEdge.from} ↔ ${foundEdge.to}`);
+                            } catch(e) {}
+                        }, 2500); 
+                    }
+                }
+
+                if (foundNode) {
+                    const targetUF = foundNode.cluster_uf;
+                    if (targetUF && targetUF !== 'N/A') {
+                        await enterStateMode(targetUF);
+                        await sleep(1500); 
+                    }
+                    network.selectNodes([foundNode.id]);
+                    network.focus(foundNode.id, { 
+                        scale: 1.5, 
+                        animation: { duration: 1000, easingFunction: 'easeInOutQuad' } 
+                    });
+                    carregarPainelSite(foundNode);
+                } else { 
+                    alert("❌ Nenhum Site ou Circuito (ACCID) encontrado."); 
+                }
+            }
+            
+            document.getElementById('search-btn').addEventListener('click', doSearch);
+            document.getElementById('clear-search-btn').addEventListener('click', () => { 
+                searchInput.value = ''; 
+                if(stateModeActive) exitStateMode(); 
+                else { network.fit(); closeSidePanel(); }
+            });
+            searchInput.addEventListener('keypress', e => { if(e.key === 'Enter') doSearch(); });
+        });
+
+        // --- FUNÇÕES GLOBAIS ---
+        async function enterStateMode(uf) {
+            stateModeActive = true;
+            const btn = document.getElementById('cluster-uf-btn');
+            btn.innerText = "🔙 VOLTAR AO MAPA NACIONAL";
+            btn.style.backgroundColor = "#ff4444"; 
+            btn.style.color = "white";
+            btn.onclick = exitStateMode; 
+
+            const allClusters = network.body.nodeIndices.filter(id => network.isCluster(id));
+            for (const clusterId of allClusters) {
+                try { network.openCluster(clusterId); } catch(e) {}
+            }
+
+            const stateNodesIds = nodesDataSet.getIds({
+                filter: function(item) { return item.cluster_uf === uf; }
+            });
+
+            const updates = [];
+            nodesDataSet.forEach(node => {
+                if (node.cluster_uf !== uf) {
+                    updates.push({id: node.id, hidden: true});
+                } else {
+                    updates.push({id: node.id, hidden: false});
+                }
+            });
+            nodesDataSet.update(updates);
+
+            const allEdges = edgesDataSet.get();
+            const connectedUFs = new Set();
+            const borderEdges = [];
+
+            allEdges.forEach(edge => {
+                const fromIn = stateNodesIds.includes(edge.from);
+                const toIn = stateNodesIds.includes(edge.to);
+
+                if ((fromIn && !toIn) || (!fromIn && toIn)) {
+                    const neighborId = fromIn ? edge.to : edge.from;
+                    const internalId = fromIn ? edge.from : edge.to;
+                    const neighbor = nodesDataSet.get(neighborId);
+                    
+                    if (neighbor && neighbor.cluster_uf && neighbor.cluster_uf !== uf) {
+                        connectedUFs.add(neighbor.cluster_uf);
+                        borderEdges.push({ 
+                            internalNode: internalId, 
+                            targetUF: neighbor.cluster_uf,
+                            has_circuit: edge.has_circuit,
+                            originalTitle: edge.title,
+                            realNeighborId: neighborId
+                        });
+                    }
+                }
+            });
+
+            const cloudUpdates = [];
+            const edgeUpdates = [];
+
+            connectedUFs.forEach(extUF => {
+                const cloudId = 'cloud_' + extUF;
+                tempCloudNodes.push(cloudId);
+                cloudUpdates.push({
+                    id: cloudId, 
+                    label: 'Nuvem ' + extUF, 
+                    shape: 'cloud', 
+                    color: '#cccccc', 
+                    size: 50, 
+                    font: { size: 20, face: 'arial' }, 
+                    cluster_uf: 'CLOUD' 
+                });
+            });
+            nodesDataSet.add(cloudUpdates);
+
+            borderEdges.forEach((bEdge, index) => {
+                const edgeId = 'temp_edge_' + index;
+                tempCloudEdges.push(edgeId);
+                let edgeColor = '#888';
+                let edgeWidth = 1;
+                let edgeShadow = false;
+
+                if (bEdge.has_circuit) {
+                    edgeColor = '#00e5ff'; 
+                    edgeWidth = 4;         
+                    edgeShadow = { enabled: true, color: '#00e5ff', size: 10, x: 0, y: 0 }; 
+                }
+
+                edgeUpdates.push({ 
+                    id: edgeId, 
+                    from: bEdge.internalNode, 
+                    to: 'cloud_' + bEdge.targetUF, 
+                    dashes: true, 
+                    color: edgeColor,
+                    width: edgeWidth,
+                    shadow: edgeShadow,
+                    title: bEdge.originalTitle,
+                    real_target: bEdge.realNeighborId
+                });
+            });
+            edgesDataSet.add(edgeUpdates);
+
+            network.setOptions({
+                physics: {
+                    barnesHut: { gravitationalConstant: -8000, springLength: 200, centralGravity: 0.1 }
+                }
+            });
+            network.fit(); 
+        }
+
+        async function exitStateMode() {
+            stateModeActive = false;
+            nodesDataSet.remove(tempCloudNodes);
+            edgesDataSet.remove(tempCloudEdges);
+            tempCloudNodes = [];
+            tempCloudEdges = [];
+
+            const updates = [];
+            nodesDataSet.forEach(node => {
+                updates.push({id: node.id, hidden: false});
+            });
+            nodesDataSet.update(updates);
+
+            const btn = document.getElementById('cluster-uf-btn');
+            btn.innerText = "🇧🇷 AGRUPAR POR UF"; 
+            btn.style.backgroundColor = "#FFD700";
+            btn.style.color = "black";
+            btn.onclick = toggleClusterUF;
+
+            isClusteredByUF = false; 
+            toggleClusterUF(); 
+        }
+
+        window.toggleClusterUF = async function() {
+            const btn = document.getElementById('cluster-uf-btn');
+            
+            // --- DETECÇÃO INTELIGENTE DE COR ---
+            const isMatrix = document.body.classList.contains('matrix-mode');
+            const isCyber = document.body.classList.contains('cyberpunk-mode');
+            
+            let fontColor = '#333';
+            if (isMatrix) fontColor = '#00ff41'; // Verde
+            if (isCyber) fontColor = '#00e5ff'; // Ciano
+
+            const uniqueUFs = new Set();
+            const ufCounts = {}; 
+            
+            nodesDataSet.forEach(node => {
+                if (node.cluster_uf && node.cluster_uf !== 'N/A') {
+                    uniqueUFs.add(node.cluster_uf);
+                    ufCounts[node.cluster_uf] = (ufCounts[node.cluster_uf] || 0) + 1;
+                }
+            });
+
+            if (isClusteredByUF) {
+                // --- MODO DESAGRUPAR ---
+                network.setOptions({ physics: { barnesHut: { gravitationalConstant: -8000, springLength: 200, centralGravity: 0.1 } } });
+                
+                btn.disabled = true; btn.innerText = "⏳ ABRINDO ESTADOS...";
+
+                const sortedUFs = Object.entries(ufCounts).sort((a, b) => a[1] - b[1]);
+                for (const [uf, count] of sortedUFs) {
+                    const clusterId = 'cluster_uf_' + uf;
+                    if (network.isCluster(clusterId)) {
+                        try { network.openCluster(clusterId); } catch(e) {}
+                        let delay = 200; 
+                        if (count > 10) delay = 800;  
+                        if (count > 50) delay = 1500;  
+                        await sleep(delay); 
+                    }
+                }
+                isClusteredByUF = false;
+                btn.innerText = "🇧🇷 AGRUPAR POR UF";
+                btn.style.backgroundColor = "#FFD700";
+                btn.style.color = "black";
+                btn.disabled = false; 
+                
+            } else {
+                // --- MODO AGRUPAR ---
+                const totalClusters = uniqueUFs.size;
+                let physicsSettings = (totalClusters < 10) 
+                    ? { barnesHut: { gravitationalConstant: -2000, springLength: 150, centralGravity: 0.5 } }
+                    : { barnesHut: { gravitationalConstant: -50000, springLength: 300, springConstant: 0.01, centralGravity: 0.1 } };
+                
+                network.setOptions({ physics: physicsSettings });
+
+                uniqueUFs.forEach(uf => {
+                    const clusterOptions = {
+                        joinCondition: function(childOptions) { return childOptions.cluster_uf === uf; },
+                        processProperties: function(clusterOptions, childNodes) {
+                            const count = childNodes.length;
+                            
+                            let iconCode = '\uf233'; let iconColor = '#FFD700'; let iconSize = 50;
+
+                            if (count <= 10) { iconCode = '\uf233'; iconSize = 40; iconColor = '#00acc1'; } 
+                            else if (count <= 40) { iconCode = '\uf1ad'; iconSize = 60; iconColor = '#FFD700'; } 
+                            else if (count <= 100) { iconCode = '\uf64f'; iconSize = 80; iconColor = '#ff5722'; } 
+                            else { iconCode = '\uf0ac'; iconSize = 100; iconColor = '#d500f9'; }
+
+                            clusterOptions.shape = 'icon';
+                            clusterOptions.icon = {
+                                face: "'Font Awesome 6 Free'",
+                                code: iconCode,
+                                weight: '900',
+                                size: iconSize,
+                                color: iconColor
+                            };
+
+                            clusterOptions.label = `${uf}\n(${count})`;
+                            clusterOptions.font = { size: 16, face: 'arial', color: fontColor, vadjust: 0, align: 'center', bold: true }; 
+                            
+                            clusterOptions.id = 'cluster_uf_' + uf;
+                            clusterOptions.title = `Estado: ${uf} (${count} sites) - Clique duplo para abrir`;
+                            return clusterOptions;
+                        },
+                        clusterNodeProperties: { id: 'cluster_uf_' + uf, allowSingleNodeCluster: true }
+                    };
+                    network.cluster(clusterOptions);
+                });
+                
+                isClusteredByUF = true;
+                btn.innerText = "❌ DESAGRUPAR";
+                btn.style.backgroundColor = "#333";
+                btn.style.color = "#FFD700";
+            }
+        };
+
+        window.closeSidePanel = () => document.getElementById('side-panel').classList.remove('open');
+        window.fecharRaioX = () => document.getElementById('modalRaioX').style.display = "none";
+        window.onclick = e => { if(e.target == document.getElementById('modalRaioX')) fecharRaioX(); }
+
+        window.abrirRaioXLink = async function(siteA, siteB) {
+            const modal = document.getElementById('modalRaioX');
+            const body = document.getElementById('raioxBody');
+            modal.style.display = "block";
+            body.innerHTML = '<div style="text-align:center; padding:20px;">Analisando Fibras...</div>';
+            try {
+                const resp = await fetch('/api/diagrama/raio_x_link', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ origem: siteA, destino: siteB })
+                });
+                const res = await resp.json();
+                let html = `<div style="text-align:center; margin-bottom:15px; font-size:14px; color:var(--text-color);">Trecho: <b>${siteA}</b> ↔ <b>${siteB}</b></div>`;
+                if (res.success && res.total > 0) {
+                    res.circuitos.forEach(c => {
+                        html += `<div class="circuit-card" style="border-left-color: ${c.status_falha ? 'var(--alert-color)' : 'var(--accent-color)'}">
+                            <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>ACCID: ${c.accid}</span><span>${c.tipo_falha || 'OPERACIONAL'}</span></div>
+                            <div class="router-flow"><span class="router-name">${c.rot_origem || 'Origem Desconhecida'}</span><span style="color:var(--text-color);">➡ FLUXO LÓGICO ➡</span><span class="router-name">${c.rot_destino || 'Destino Desconhecido'}</span></div>
+                        </div>`;
+                    });
+                    body.innerHTML = html;
+                } else {
+                    body.innerHTML = html + `<div style="text-align:center; padding:20px; opacity:0.7;"><h3>Apenas Infraestrutura Física</h3><p>Não há registros de circuitos lógicos passando por este cabo no momento.</p></div>`;
+                }
+            } catch(e) { body.innerHTML = "Erro ao buscar dados."; }
+        };
+
+        window.runSherlockUpdate = async function() {
+            const btn = document.querySelector('.btn-sherlock');
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ Processando...";
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/debug/sherlock_locate_routers', { method: 'POST' });
+                const json = await res.json();
+                if(json.success) { alert(`✅ Concluído!\n${json.message}`); location.reload(); } 
+                else { alert("Erro: " + json.message); }
+            } catch(e) { alert("Erro de conexão."); } 
+            finally { btn.innerText = originalText; btn.disabled = false; }
+        };
+    </script>
+{% endblock %}

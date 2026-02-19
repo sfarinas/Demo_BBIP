@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar Elementos{% endblock %}
+
+{% block main_content %}
+    <h2>Elementos de Rede Cadastrados</h2>
+    {% if elementos %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome do Elemento</th>
+                <th>Gerência</th>
+                <th>Longa Distância</th>
+                <th>ACCID/LC(s)</th>
+                <th>Swap de Fibra</th>
+                <th>Estado Atual</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for elemento in elementos %}
+                <tr>
+                    <td>{{ elemento.id }}</td>
+                    <td>{{ elemento.nome_elemento }}</td>
+                    <td>{{ elemento.nome_gerencia }}</td>
+                    <td>{{ 'Sim' if elemento.longa_distancia else 'Não' }}</td>
+                    <td>{{ elemento.accid_lcs }}</td>
+                    <td>{{ elemento.swap_fibras }}</td>
+                    <td>{{ elemento.estado_atual if elemento.estado_atual else 'N/A' }}</td>
+                    <td>
+                        <a href="{{ url_for('detalhes_elemento', elemento_id=elemento.id) }}" class="button small-button">Detalhes</a>
+                        <form action="{{ url_for('excluir_elemento', elemento_id=elemento.id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir o elemento {{ elemento.nome_elemento }} e todos os seus registros relacionados? Esta ação não pode ser desfeita.');">
+                            <button type="submit" class="button small-button danger-button">Excluir</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p>Nenhum elemento cadastrado ainda.</p>
+    {% endif %}
+{% endblock %}
